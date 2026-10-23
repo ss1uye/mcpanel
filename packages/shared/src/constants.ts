@@ -6,9 +6,6 @@ export const CONSOLE_HISTORY_BYTES = 64 * 1024;
 export const WS_CHANNEL_PATTERN =
   /^(instance:[0-9a-f-]{36}:(console|status|metrics|players)|system:metrics|task:[0-9a-f-]{36})$/;
 
-// Alias: the contract test imports `channelPattern` while the WS hub uses `WS_CHANNEL_PATTERN`.
-export const channelPattern = WS_CHANNEL_PATTERN;
-
 export const INSTANCE_STATES = ['stopped', 'starting', 'running', 'stopping', 'crashed', 'orphaned', 'unknown'] as const;
 export type InstanceState = (typeof INSTANCE_STATES)[number];
 

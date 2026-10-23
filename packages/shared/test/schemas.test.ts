@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   API_ERROR_CODES,
   ERROR_HTTP_STATUS,
-  channelPattern,
+  WS_CHANNEL_PATTERN,
   consoleCommandSchema,
   createInstanceSchema,
   markStoppedSchema,
@@ -33,9 +33,9 @@ describe('shared contracts', () => {
   });
 
   it('only accepts known channels', () => {
-    expect(channelPattern.test('instance:0b9e3a2e-8a41-4f7e-9a8e-1f2d3c4b5a69:console')).toBe(true);
-    expect(channelPattern.test('instance:x:console')).toBe(false);
-    expect(channelPattern.test('system:metrics')).toBe(true);
+    expect(WS_CHANNEL_PATTERN.test('instance:0b9e3a2e-8a41-4f7e-9a8e-1f2d3c4b5a69:console')).toBe(true);
+    expect(WS_CHANNEL_PATTERN.test('instance:x:console')).toBe(false);
+    expect(WS_CHANNEL_PATTERN.test('system:metrics')).toBe(true);
   });
 
   it('requires explicit confirmation for mark-stopped', () => {
