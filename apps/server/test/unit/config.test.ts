@@ -7,8 +7,6 @@ import { assertSafeBind, isLoopback, loadConfig } from '../../src/config';
 
 const dirs: string[] = [];
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
-const defaultDataDir = path.join(repoRoot, 'data');
-const defaultDataDirExisted = fs.existsSync(defaultDataDir);
 
 function tempDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcpanel-config-'));
@@ -16,18 +14,8 @@ function tempDir(): string {
   return dir;
 }
 
-function toPosix(value: string): string {
-  return value.split(path.sep).join('/');
-}
-
-function isInside(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
 afterEach(() => {
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
-  if (!defaultDataDirExisted) fs.rmSync(defaultDataDir, { recursive: true, force: true });
 });
 
 describe('config', () => {
@@ -43,15 +31,16 @@ describe('config', () => {
 
   it('resolves migrations and web assets relative to the module, not the cwd', () => {
     const config = loadConfig({ NODE_ENV: 'test', DATA_DIR: tempDir() });
-    expect(toPosix(config.migrationsDir)).toMatch(/\/apps\/server\/drizzle$/);
-    expect(toPosix(config.webDistDir)).toMatch(/\/apps\/web\/dist$/);
+    expect(config.migrationsDir).toBe(path.join(repoRoot, 'apps', 'server', 'drizzle'));
+    expect(config.webDistDir).toBe(path.join(repoRoot, 'apps', 'web', 'dist'));
   });
 
-  it('resolves the default data dir from the repo root', () => {
-    const config = loadConfig({ NODE_ENV: 'test' });
-    expect(config.dataDir).toBe(defaultDataDir);
-    expect(isInside(repoRoot, config.dataDir)).toBe(true);
-    expect(isInside(path.join(repoRoot, 'apps', 'server'), config.dataDir)).toBe(false);
+  it('preserves an absolute DATA_DIR exactly', () => {
+    const dataDir = tempDir();
+    expect(path.isAbsolute(dataDir)).toBe(true);
+    const config = loadConfig({ NODE_ENV: 'test', DATA_DIR: dataDir });
+    expect(config.dataDir).toBe(dataDir);
+    expect(config.dbPath).toBe(path.join(dataDir, 'panel.db'));
   });
 
   it('detects loopback hosts', () => {
