@@ -10,8 +10,8 @@ import type { DB } from './client';
  * - Each file is executed inside a transaction opened by this runner.
  * - Files must therefore contain plain DDL/DML only: no explicit transaction
  *   control (BEGIN/COMMIT/ROLLBACK) and no `PRAGMA foreign_keys` toggling.
- * - Applied files are immutable; changing one is detected via its checksum and
- *   aborts startup. Add a new migration instead.
+ * - Applied files are immutable; changing or deleting one is detected and aborts
+ *   startup. Add a new migration instead.
  */
 
 interface MigrationRow {
@@ -19,11 +19,45 @@ interface MigrationRow {
   checksum: string;
 }
 
-function checksumOf(sqlText: string): string {
-  return createHash('sha256').update(sqlText, 'utf8').digest('hex');
+const MIGRATIONS_TABLE = '_migrations';
+
+/**
+ * Hash of the normalized migration text. Line endings are folded to LF so a CRLF
+ * checkout (e.g. core.autocrlf=true) and an LF checkout agree; the original text
+ * is still what gets executed.
+ */
+export function checksumOf(sqlText: string): string {
+  return createHash('sha256')
+    .update(sqlText.replace(/\r\n?/g, '\n'), 'utf8')
+    .digest('hex');
+}
+
+/**
+ * Databases created by the old runner have a `_migrations (name, applied_at)`
+ * table. That pre-release shape has no upgrade path, so fail with an actionable
+ * message instead of SQLite's "no such column: checksum".
+ */
+function assertMigrationsTableCompatible(sqlite: Database.Database): void {
+  const existing = sqlite
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(MIGRATIONS_TABLE);
+  if (existing === undefined) {
+    return;
+  }
+
+  const columns = sqlite.pragma(`table_info(${MIGRATIONS_TABLE})`) as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === 'checksum')) {
+    throw new Error(
+      'The existing _migrations table predates checksum tracking and has no "checksum" column. ' +
+        'This pre-release schema change has no automatic upgrade path: back up data/panel.db if ' +
+        'you need its contents, then delete data/panel.db and start the panel again.',
+    );
+  }
 }
 
 export function runMigrations(sqlite: Database.Database, migrationsDir: string): void {
+  assertMigrationsTableCompatible(sqlite);
+
   sqlite.exec(
     'CREATE TABLE IF NOT EXISTS _migrations (' +
       'name TEXT PRIMARY KEY NOT NULL, ' +
@@ -39,6 +73,19 @@ export function runMigrations(sqlite: Database.Database, migrationsDir: string):
   );
 
   const files = fs.readdirSync(migrationsDir).filter((file) => file.endsWith('.sql')).sort();
+  const filesOnDisk = new Set(files);
+
+  // Applied migrations are immutable history: deleting or renaming one is drift,
+  // not a rollback, and is fixed by restoring the file rather than ignoring it.
+  for (const name of applied.keys()) {
+    if (!filesOnDisk.has(name)) {
+      throw new Error(
+        `Migration drift detected: applied migration "${name}" no longer exists in ${migrationsDir}. ` +
+          'Restore the applied file (or the database backup it belongs to) and add a new migration ' +
+          'for further schema changes.',
+      );
+    }
+  }
 
   // Verify every already applied file before applying anything new, so a modified
   // migration aborts startup without leaving the database half-migrated.

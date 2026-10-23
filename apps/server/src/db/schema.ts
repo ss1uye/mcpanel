@@ -1,3 +1,4 @@
+// 0000_init.sql is the schema source of truth; SQLite CHECK and COLLATE NOCASE are DDL-only.
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable(

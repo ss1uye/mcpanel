@@ -1,0 +1,2 @@
+# Migration files are hashed; keep them byte-stable (LF) across checkouts.
+*.sql text eol=lf
