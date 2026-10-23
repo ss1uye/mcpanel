@@ -1,7 +1,10 @@
 import cookie from '@fastify/cookie';
 import csrf from '@fastify/csrf-protection';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
+import fs from 'node:fs';
+import path from 'node:path';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { PANEL_VERSION } from '@mcpanel/shared';
@@ -38,6 +41,16 @@ export interface AppServices {
 
 export interface BuildAppOptions {
   logger?: FastifyBaseLogger;
+  serveStatic?: boolean;
+}
+
+/** Client-side routes must fall back to index.html, but API misses and asset requests must not. */
+export function shouldServeSpa(url: string, method: string): boolean {
+  if (method !== 'GET' && method !== 'HEAD') return false;
+  const pathname = url.split('?', 1)[0] ?? url;
+  if (pathname.startsWith('/api')) return false;
+  const isFileLike = path.extname(pathname) !== '';
+  return !isFileLike || pathname.endsWith('.html');
 }
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -114,7 +127,16 @@ export async function buildApp(
     return reply.status(500).send({ error: { code: 'INTERNAL', message: '服务器内部错误' } });
   });
 
+  const serveStatic = options.serveStatic ?? config.nodeEnv !== 'test';
+  const hasSpa = serveStatic && fs.existsSync(path.join(config.webDistDir, 'index.html'));
+  if (hasSpa) {
+    await app.register(fastifyStatic, { root: config.webDistDir });
+  }
+
   app.setNotFoundHandler((request, reply) => {
+    if (hasSpa && shouldServeSpa(request.url, request.method)) {
+      return reply.type('text/html').sendFile('index.html');
+    }
     return reply.status(404).send({ error: { code: 'NOT_FOUND', message: '资源不存在' } });
   });
 

@@ -96,6 +96,18 @@ describe('RconService', () => {
     expect(service.getCachedStatus(instance.id)).toBe('unreachable');
   });
 
+  it('statusFor() never claims a failed connection for an RCON-disabled server', async () => {
+    const disabled = await setup({ enabled: false });
+    expect(await disabled.service.statusFor(disabled.instance)).toBe('disabled');
+
+    const enabled = await setup({ respond: false });
+    expect(await enabled.service.statusFor(enabled.instance)).toBe('unreachable');
+
+    const connected = await setup();
+    await connected.service.test(connected.instance);
+    expect(await connected.service.statusFor(connected.instance)).toBe('connected');
+  });
+
   it('throws RCON_UNAVAILABLE when sending to a dead server', async () => {
     const { service, instance } = await setup({ respond: false });
     await expect(service.send(instance, 'list')).rejects.toMatchObject({ code: 'RCON_UNAVAILABLE' });

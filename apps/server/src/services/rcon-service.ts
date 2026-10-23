@@ -23,6 +23,14 @@ export class RconService {
     return this.statuses.get(instanceId) ?? 'unreachable';
   }
 
+  /** Never claim a failed connection for an instance whose server.properties has RCON off. */
+  async statusFor(instance: InstanceRow): Promise<RconStatus> {
+    const cached = this.statuses.get(instance.id);
+    if (cached) return cached;
+    const resolution = await this.resolveTarget(instance);
+    return resolution.kind === 'disabled' ? 'disabled' : 'unreachable';
+  }
+
   async resolveTarget(instance: InstanceRow): Promise<TargetResolution> {
     const properties = await loadServerProperties(instance.rootPath);
     const parsed = properties?.parsed ?? null;

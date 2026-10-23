@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServerWsMessage, SystemMetricsSample } from '@mcpanel/shared';
-import { MetricsService, type MetricsCollector } from '../../src/services/metrics-service';
+import { collectTreePids, MetricsService, type MetricsCollector } from '../../src/services/metrics-service';
 import { diskUsage } from '../../src/utils/disk';
 import { instances } from '../../src/db/schema';
 import type { InstanceSupervisor } from '../../src/services/instance-supervisor';
@@ -150,5 +150,31 @@ describe('MetricsService', () => {
     expect(usage.total).toBeGreaterThan(0);
     expect(usage.free).toBeGreaterThan(0);
     expect(usage.free).toBeLessThanOrEqual(usage.total);
+  });
+});
+
+describe('collectTreePids', () => {
+  const processes = [
+    { pid: 100, parentPid: 1 },
+    { pid: 101, parentPid: 100 },
+    { pid: 102, parentPid: 101 },
+    { pid: 200, parentPid: 5 },
+    { pid: 5, parentPid: 4 },
+  ];
+
+  it('includes the wrapper shell and every descendant', () => {
+    expect(collectTreePids(processes, 100).sort()).toEqual([100, 101, 102]);
+  });
+
+  it('returns only the root when the subtree is empty', () => {
+    expect(collectTreePids(processes, 200)).toEqual([200]);
+  });
+
+  it('survives a parent cycle instead of looping forever', () => {
+    const cyclic = [
+      { pid: 7, parentPid: 8 },
+      { pid: 8, parentPid: 7 },
+    ];
+    expect(collectTreePids(cyclic, 7).sort()).toEqual([7, 8]);
   });
 });

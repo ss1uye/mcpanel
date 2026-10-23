@@ -111,7 +111,7 @@ describe('instances API', () => {
     const detail = await app.inject({ method: 'GET', url: `/api/instances/${instance.id}`, headers: readHeaders });
     expect(json<{ backupExtraPaths: string[]; rconStatus: string }>(detail)).toMatchObject({
       backupExtraPaths: [],
-      rconStatus: 'unreachable',
+      rconStatus: 'disabled',
     });
 
     const patched = await app.inject({

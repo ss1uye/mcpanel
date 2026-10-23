@@ -39,9 +39,9 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
   const read = { preHandler: [requireAuth] };
   const write = { preHandler: [requireOrigin, requireAuth, app.csrfProtection] };
 
-  const detail = (instanceId: string): InstanceInfo => {
+  const detail = async (instanceId: string): Promise<InstanceInfo> => {
     const row = instances.get(instanceId);
-    return toInstanceInfo(row, supervisor.getStatus(instanceId), rcon.getCachedStatus(instanceId));
+    return toInstanceInfo(row, supervisor.getStatus(instanceId), await rcon.statusFor(row));
   };
 
   const withInstance = (instanceId: string): InstanceStatusSnapshot => {
@@ -50,7 +50,9 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
   };
 
   app.get('/api/instances', read, async () => ({
-    items: instances.list().map((row) => toInstanceInfo(row, supervisor.getStatus(row.id), rcon.getCachedStatus(row.id))),
+    items: await Promise.all(
+      instances.list().map(async (row) => toInstanceInfo(row, supervisor.getStatus(row.id), await rcon.statusFor(row))),
+    ),
   }));
 
   app.post('/api/instances/probe', write, async (request) => {
@@ -70,7 +72,7 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
       detail: { name: row.name, rootPath: row.rootPath },
       ip: request.ip,
     });
-    return reply.status(201).send(detail(row.id));
+    return reply.status(201).send(await detail(row.id));
   });
 
   app.get<{ Params: { id: string } }>('/api/instances/:id', read, async (request) => detail(request.params.id));
@@ -88,7 +90,7 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
       detail: { fields: Object.keys(patch) },
       ip: request.ip,
     });
-    return detail(row.id);
+    return await detail(row.id);
   });
 
   app.delete<{ Params: { id: string } }>('/api/instances/:id', write, async (request, reply) => {

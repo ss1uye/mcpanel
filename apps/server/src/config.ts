@@ -35,7 +35,8 @@ function readString(env: NodeJS.ProcessEnv, key: string): string | undefined {
 
 function parseNodeEnv(env: NodeJS.ProcessEnv): NodeEnv {
   const raw = readString(env, 'NODE_ENV');
-  if (raw === undefined) return 'development';
+  // Unset means a plain `npm start`, which must run with production defaults.
+  if (raw === undefined) return 'production';
   if ((nodeEnvs as readonly string[]).includes(raw)) return raw as NodeEnv;
   throw new Error(`NODE_ENV 无效：${raw}（仅支持 ${nodeEnvs.join('、')}）`);
 }

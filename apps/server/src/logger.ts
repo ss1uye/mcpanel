@@ -27,18 +27,25 @@ export function createLogger(dataDir: string, level: string, pretty: boolean): L
       transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:standard' } },
     });
   }
-  return pino(
-    options,
-    pino.transport({
-      target: 'pino-roll',
-      options: {
-        file: path.join(dataDir, 'logs', 'panel'),
-        size: '10m',
-        limit: { count: 5 },
-        mkdir: true,
-      },
-    }),
-  );
+  return pino({
+    ...options,
+    transport: {
+      targets: [
+        // Operators run `npm start` in a terminal, so startup and fatal errors must also reach stdout.
+        { target: 'pino/file', options: { destination: 1 }, level },
+        {
+          target: 'pino-roll',
+          options: {
+            file: path.join(dataDir, 'logs', 'panel'),
+            size: '10m',
+            limit: { count: 5 },
+            mkdir: true,
+          },
+          level,
+        },
+      ],
+    },
+  });
 }
 
 export function silentLogger(): Logger {

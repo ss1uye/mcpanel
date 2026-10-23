@@ -15,6 +15,45 @@ export interface MetricsCollector {
   instance(pid: number, rootPath: string): Promise<ProcessMetricsSample>;
 }
 
+interface TreeProcess {
+  pid: number;
+  parentPid: number;
+}
+
+/**
+ * The start command runs through a shell, so the tracked PID is only the wrapper:
+ * the JVM lives in its subtree and must be included in the resource totals.
+ */
+export function collectTreePids(processes: TreeProcess[], rootPid: number): number[] {
+  const children = new Map<number, number[]>();
+  for (const process of processes) {
+    const siblings = children.get(process.parentPid);
+    if (siblings) siblings.push(process.pid);
+    else children.set(process.parentPid, [process.pid]);
+  }
+
+  const pids: number[] = [];
+  const seen = new Set<number>();
+  const pending = [rootPid];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || seen.has(current)) continue;
+    seen.add(current);
+    pids.push(current);
+    pending.push(...(children.get(current) ?? []));
+  }
+  return pids;
+}
+
+async function treePids(rootPid: number): Promise<number[]> {
+  try {
+    const { list } = await si.processes();
+    return collectTreePids(list, rootPid);
+  } catch {
+    return [rootPid];
+  }
+}
+
 export const defaultCollector: MetricsCollector = {
   async system(dataDir) {
     const [load, mem, disk, time] = await Promise.all([si.currentLoad(), si.mem(), diskUsage(dataDir), si.time()]);
@@ -33,11 +72,17 @@ export const defaultCollector: MetricsCollector = {
     };
   },
   async instance(pid, rootPath) {
-    const [usage, disk] = await Promise.all([pidusage(pid), diskUsage(rootPath)]);
+    const pids = await treePids(pid);
+    const usages = await Promise.all(pids.map((candidate) => pidusage(candidate).catch(() => null)));
+    const measured = usages.filter((usage) => usage !== null);
+    if (measured.length === 0) throw new Error(`进程 ${pid} 无法采样`);
+    const disk = await diskUsage(rootPath);
+    const cpu = measured.reduce((total, usage) => total + usage.cpu, 0);
+    const memBytes = measured.reduce((total, usage) => total + usage.memory, 0);
     return {
       ts: new Date().toISOString(),
-      cpu: Number(usage.cpu.toFixed(1)),
-      memBytes: usage.memory,
+      cpu: Number(cpu.toFixed(1)),
+      memBytes,
       diskFreeBytes: disk.free,
     };
   },

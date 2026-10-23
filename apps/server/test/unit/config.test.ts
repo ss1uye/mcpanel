@@ -80,7 +80,7 @@ describe('config', () => {
       LOG_LEVEL: '  ',
       MAX_UPLOAD_MB: ' ',
     });
-    expect(config.nodeEnv).toBe('development');
+    expect(config.nodeEnv).toBe('production');
     expect(config.host).toBe('127.0.0.1');
     expect(config.port).toBe(3000);
     expect(config.cookieSecure).toBe(false);
