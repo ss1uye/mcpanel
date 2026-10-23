@@ -1,9 +1,12 @@
 node_modules/
 dist/
-data/
-data-dev/
+/data/
+/data-dev/
 .env
+.env.*
+!.env.example
 *.log
 coverage/
 test-results/
 playwright-report/
+*.tsbuildinfo

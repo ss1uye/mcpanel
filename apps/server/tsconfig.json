@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "types": ["node"] },
+  "compilerOptions": { "lib": ["ES2023"], "types": ["node"] },
   "include": ["src", "test", "tsup.config.ts", "drizzle.config.ts"]
 }
