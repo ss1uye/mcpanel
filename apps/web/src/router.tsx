@@ -10,6 +10,8 @@ import { DashboardPage } from './pages/DashboardPage';
 import { InstancesPage } from './pages/InstancesPage';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
+import { ConsoleTab } from './pages/instance/ConsoleTab';
+import { InstanceSettingsTab } from './pages/instance/InstanceSettingsTab';
 import { OverviewTab } from './pages/instance/OverviewTab';
 
 function AuthGate({ children }: { children: ReactNode }) {
@@ -52,6 +54,8 @@ export function AppRouter() {
         <Route path="instances/:id" element={<InstanceLayout />}>
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<OverviewTab />} />
+          <Route path="console" element={<ConsoleTab />} />
+          <Route path="settings" element={<InstanceSettingsTab />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

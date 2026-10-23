@@ -26,7 +26,11 @@ const ACTION_LABELS: Record<InstanceAction, string> = {
 
 const RIGHT_PANEL_KEY = 'mcpanel:right-panel';
 
-const tabs = [{ to: 'overview', label: '概览' }];
+const tabs = [
+  { to: 'overview', label: '概览' },
+  { to: 'console', label: '控制台' },
+  { to: 'settings', label: '设置' },
+];
 
 function rconLabel(status: RconStatus): string {
   return RCON_LABELS[status];
@@ -197,6 +201,12 @@ export function InstanceLayout() {
                 </span>
               </div>
               {status.error && <div className="rounded-md bg-red-500/10 p-2 text-xs text-[var(--danger)]">{status.error}</div>}
+              <Link
+                to="console"
+                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface-2)] text-sm"
+              >
+                打开控制台
+              </Link>
             </div>
           </aside>
         )}

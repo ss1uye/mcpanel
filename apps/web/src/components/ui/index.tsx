@@ -252,6 +252,7 @@ export function ConfirmDialog({
   confirmLabel = '确认',
   danger = false,
   loading = false,
+  confirmDisabled = false,
   onConfirm,
   children,
 }: {
@@ -262,6 +263,7 @@ export function ConfirmDialog({
   confirmLabel?: string;
   danger?: boolean;
   loading?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   children?: ReactNode;
 }) {
@@ -276,7 +278,7 @@ export function ConfirmDialog({
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button variant={danger ? 'danger' : 'primary'} loading={loading} onClick={onConfirm}>
+          <Button variant={danger ? 'danger' : 'primary'} loading={loading} disabled={confirmDisabled} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </>

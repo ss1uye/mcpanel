@@ -1,4 +1,4 @@
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import type { InstanceOutletContext } from '../../layouts/InstanceLayout';
 import { MetricsSparkline } from '../../components/MetricsSparkline';
 import { useInstanceConsole, useInstanceMetrics } from '../../stores/realtime';
@@ -57,7 +57,12 @@ export function OverviewTab() {
       </div>
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-        <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-medium">最近控制台</div>
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3 text-sm">
+          <span className="font-medium">最近控制台</span>
+          <Link to="../console" className="text-[var(--primary)] hover:underline">
+            打开控制台 →
+          </Link>
+        </div>
         <pre className="console-font max-h-64 overflow-auto p-4 text-xs leading-5 text-[var(--muted)]">
           {recentLines.map((line) => `${line.text}\n`).join('') || '暂无日志'}
         </pre>
