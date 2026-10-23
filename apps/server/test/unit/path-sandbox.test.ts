@@ -51,6 +51,8 @@ describe('PathSandbox', () => {
     await fs.mkdir(path.join(root, 'config'));
     const sandbox = new PathSandbox(dataDir);
     await expect(sandbox.resolve(root, '/config/x.yml')).resolves.toBe(path.join(root, 'config', 'x.yml'));
+    await expect(sandbox.resolve(root, '/')).resolves.toBe(root);
+    await expect(sandbox.resolve(root, '')).resolves.toBe(root);
     await expect(sandbox.resolve(root, '../outside.txt')).rejects.toMatchObject({ code: 'PATH_OUTSIDE_ROOT' });
     await expect(sandbox.resolve(root, 'a/../../outside.txt')).rejects.toMatchObject({ code: 'PATH_OUTSIDE_ROOT' });
     await expect(sandbox.resolve(root, 'C:\\Windows\\win.ini')).rejects.toMatchObject({ code: 'PATH_OUTSIDE_ROOT' });

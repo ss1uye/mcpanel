@@ -79,6 +79,7 @@ export class PathSandbox {
     if (normalized === '..' || normalized.startsWith('../') || path.posix.isAbsolute(normalized)) {
       throw new AppError('PATH_OUTSIDE_ROOT', '路径越界');
     }
+    if (normalized === '.') return '';
     if (process.platform === 'win32') {
       for (const segment of normalized.split('/')) {
         // Reject NTFS alternate data streams and trailing dot/space aliases.
@@ -87,7 +88,7 @@ export class PathSandbox {
         }
       }
     }
-    return normalized === '.' ? '' : normalized;
+    return normalized;
   }
 
   private async assertCanonicalRoot(canonicalRoot: string): Promise<void> {
