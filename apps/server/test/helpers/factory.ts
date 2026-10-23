@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { instances } from '../../src/db/schema';
+import { instances, users } from '../../src/db/schema';
 import type { DB } from '../../src/db/client';
 
 export function insertInstance(db: DB, overrides: Partial<typeof instances.$inferInsert> = {}): string {
@@ -25,5 +25,12 @@ export function insertInstance(db: DB, overrides: Partial<typeof instances.$infe
       ...overrides,
     })
     .run();
+  return id;
+}
+
+export function insertUser(db: DB, username = 'admin', passwordHash = '$argon2id$placeholder'): string {
+  const id = randomUUID();
+  const now = Date.now();
+  db.insert(users).values({ id, username, passwordHash, role: 'admin', createdAt: now, updatedAt: now }).run();
   return id;
 }
