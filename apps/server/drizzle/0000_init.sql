@@ -1,5 +1,5 @@
 CREATE TABLE users (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   username TEXT NOT NULL COLLATE NOCASE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin')),
@@ -9,18 +9,19 @@ CREATE TABLE users (
 CREATE UNIQUE INDEX users_username_unique ON users(username);
 
 CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  token_hash TEXT NOT NULL UNIQUE,
+  token_hash TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   ip TEXT,
   user_agent TEXT
 );
+CREATE UNIQUE INDEX sessions_token_hash_unique ON sessions(token_hash);
 CREATE INDEX sessions_expires_at_idx ON sessions(expires_at);
 
 CREATE TABLE nodes (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('local', 'agent')),
   base_url TEXT,
@@ -29,7 +30,7 @@ CREATE TABLE nodes (
 );
 
 CREATE TABLE instances (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   node_id TEXT NOT NULL REFERENCES nodes(id),
   name TEXT NOT NULL COLLATE NOCASE,
   root_path TEXT NOT NULL,
@@ -55,7 +56,7 @@ CREATE UNIQUE INDEX instances_name_unique ON instances(name);
 CREATE UNIQUE INDEX instances_root_unique ON instances(node_id, root_path_key);
 
 CREATE TABLE schedules (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   instance_id TEXT NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   cron TEXT NOT NULL,
@@ -71,7 +72,7 @@ CREATE TABLE schedules (
 CREATE INDEX schedules_instance_idx ON schedules(instance_id);
 
 CREATE TABLE schedule_runs (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
   trigger TEXT NOT NULL CHECK (trigger IN ('scheduled', 'manual')),
   status TEXT NOT NULL CHECK (status IN ('running', 'success', 'failed', 'skipped')),
@@ -82,7 +83,7 @@ CREATE TABLE schedule_runs (
 CREATE INDEX schedule_runs_schedule_idx ON schedule_runs(schedule_id, started_at);
 
 CREATE TABLE backups (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   instance_id TEXT NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
   filename TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('manual', 'scheduled', 'pre_restore')),
@@ -92,12 +93,12 @@ CREATE TABLE backups (
   manifest_json TEXT,
   error TEXT,
   created_at INTEGER NOT NULL,
-  completed_at INTEGER,
-  UNIQUE (instance_id, filename)
+  completed_at INTEGER
 );
+CREATE UNIQUE INDEX backups_instance_filename_unique ON backups(instance_id, filename);
 
 CREATE TABLE audit_logs (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY NOT NULL,
   user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   action TEXT NOT NULL,
   target_type TEXT NOT NULL,
@@ -111,7 +112,7 @@ CREATE INDEX audit_action_idx ON audit_logs(action);
 CREATE INDEX audit_target_idx ON audit_logs(target_type, target_id);
 
 CREATE TABLE settings (
-  key TEXT PRIMARY KEY,
+  key TEXT PRIMARY KEY NOT NULL,
   value TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
