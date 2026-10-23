@@ -65,11 +65,13 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5 text-sm">
-      <span className="font-medium">{label}</span>
-      {children}
+    <div className="flex flex-col gap-1.5 text-sm">
+      <label className="flex flex-col gap-1.5">
+        <span className="font-medium">{label}</span>
+        {children}
+      </label>
       {hint ? <span className="text-xs text-[var(--muted)]">{hint}</span> : null}
-    </label>
+    </div>
   );
 }
 

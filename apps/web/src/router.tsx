@@ -5,9 +5,12 @@ import type { AuthStatus } from '@mcpanel/shared';
 import { api } from './api/client';
 import { Spinner } from './components/ui';
 import { AppShell } from './layouts/AppShell';
+import { InstanceLayout } from './layouts/InstanceLayout';
 import { DashboardPage } from './pages/DashboardPage';
+import { InstancesPage } from './pages/InstancesPage';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
+import { OverviewTab } from './pages/instance/OverviewTab';
 
 function AuthGate({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -45,6 +48,11 @@ export function AppRouter() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="instances" element={<InstancesPage />} />
+        <Route path="instances/:id" element={<InstanceLayout />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<OverviewTab />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
