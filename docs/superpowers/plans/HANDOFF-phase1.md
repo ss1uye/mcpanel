@@ -1,80 +1,94 @@
-# 阶段 1 执行交接文档（持续更新）
+# 阶段 1 执行交接文档（阶段收尾版）
 
-> 目的：上下文被压缩后，凭本文档即可继续执行，无需重新探索。
-> 最后更新：Task 7 完成后（HEAD `f03ef0a`）。
+> 目的：上下文被压缩后，凭本文档即可继续执行或启动阶段 2，无需重新探索。
+> 最后更新：阶段 1 全部 16 个任务 + 最终代码审查完成（HEAD `79decbb`，分支 `phase1-core`）。
 
 ## 1. 基本事实
 
 - 项目目录：`D:\minecraft server management`（Windows，Git Bash，Node v24.22.1，npm 11.19.1）
-- 分支：`phase1-core`（Task 1 里 `git init` 后创建，**不要**在 main/master 上提交）
+- 分支：`phase1-core`（未在 main/master 上提交；未使用 worktree；尚未合并回 main）
 - 设计规格：`docs/superpowers/specs/2026-10-23-minecraft-server-panel-design.md`
-- 实现计划：`docs/superpowers/plans/2026-10-23-minecraft-panel-phase1-core.md`（16 个任务）
-- 执行方式：子代理逐任务执行 + 规格审查 + 质量审查。**当前子代理触发当日用量上限，已改为在当前会话内直接实现，仍按 TDD：先写失败测试→实现→全绿→提交。**
+- 实现计划：`docs/superpowers/plans/2026-10-23-minecraft-panel-phase1-core.md`（16 个任务，全部完成）
+- 执行方式：原计划子代理逐任务执行，但子代理触发当日用量上限后改为会话内直接实现；仍按 TDD（失败测试 → 实现 → 全绿 → 提交），并在阶段结束用 `superpowers:requesting-code-review` 派发了一次整体审查（审查者实际运行了构建产物并复现问题）。
+- 当前基线全绿：`npm test`（server 139 / web 23 / shared 6）、`npm run typecheck`、`npm run lint`、`npm run build`。
+- 手工验收已做（真实浏览器 + 生产构建 + 假服务端 `fake-server.mjs` 目录）：初始化 → 登录 → 探测纳管 → 启动 → 实时控制台 → 发命令 → 停止 → 改设置 → 退出 → 再登录 → 深链刷新不 404 → 面板重启后进程消失被判 `已崩溃` 并给出原因。
 
-## 2. 验证命令（每次提交前必须全绿）
-
-```bash
-npm test -w @mcpanel/server    # 当前 14 文件 / 92 测试
-npm test -w @mcpanel/shared    # 6 测试
-npm test -w @mcpanel/web       # Task 13 起才有
-npm run typecheck              # 三个工作区
-npm run lint                   # 必须 0 error
-npm ci --dry-run --strict-allow-scripts=true
-```
-
-## 3. 任务进度
+## 2. 任务进度
 
 | 计划任务 | 状态 | 提交 |
 | --- | --- | --- |
-| Task 1 仓库与 workspaces | ✅ | `5b23e94` + 修复 `5cf0f99`、`bb29672` |
-| Task 2 共享契约 | ✅ | `4c3a298` + `57411d9` |
-| Task 3 配置/日志/AppError | ✅ | `c0bff8c` + `025efc1`、`a769b78` |
-| Task 4 数据库 schema/迁移 | ✅ | `fa5bd63` + `39d928c`、`7ee41ad` |
-| Task 5 密码/会话/审计 | ✅ | `efc2370` + `e3752be` |
-| Task 6 路径沙箱/探测 | ✅ | `1ab1af6` + `0a98c25` |
-| Task 7 进程驱动/控制台缓冲 | ✅ | `2f98898`（沙箱补丁）、`f03ef0a` |
-| Task 8 RCON 服务 | ⏳ 下一个 | — |
-| Task 9 状态机 + Supervisor | ⏳ | — |
-| Task 10 Fastify 骨架 + 认证路由 | ⏳ | — |
-| Task 11 实例/审计 API | ⏳ | — |
-| Task 12 指标 + 系统 API + WebSocket | ⏳ | — |
-| Task 13 前端基础 + 仪表盘 | ⏳ | — |
-| Task 14 实例列表 + 布局 + 概览 | ⏳ | — |
-| Task 15 控制台 + 实例设置 | ⏳ | — |
-| Task 16 启动入口 + 静态托管 + README + 验收 | ⏳ | — |
-| 最终整体代码审查 | ⏳ | — |
+| Task 1 仓库与 workspaces | ✅ | `5b23e94`、`5cf0f99`、`bb29672` |
+| Task 2 共享契约 | ✅ | `4c3a298`、`57411d9` |
+| Task 3 配置/日志/AppError | ✅ | `c0bff8c`、`025efc1`、`a769b78` |
+| Task 4 数据库 schema/迁移 | ✅ | `fa5bd63`、`39d928c`、`7ee41ad` |
+| Task 5 密码/会话/审计 | ✅ | `efc2370`、`e3752be` |
+| Task 6 路径沙箱/探测 | ✅ | `1ab1af6`、`0a98c25`、`2f98898` |
+| Task 7 进程驱动/控制台缓冲 | ✅ | `f03ef0a` |
+| Task 8 RCON 服务 | ✅ | `1ae2e98` |
+| Task 9 状态机 + Supervisor | ✅ | `bc24a3b` |
+| Task 10 Fastify 骨架 + 认证路由 | ✅ | `42bd00f` |
+| Task 11 实例/审计 API | ✅ | `d37ed90` |
+| Task 12 指标 + 系统 API + WebSocket | ✅ | `f321209` |
+| Task 13 前端基础 + 认证页 + AppShell + 仪表盘 | ✅ | `cb15860` |
+| Task 14 实例列表 + 纳管 + 布局 + 概览 | ✅ | `b91ad28` |
+| Task 15 控制台 + 命令输入 + 实例设置 | ✅ | `9ace2a9` |
+| Task 16 启动入口 + 静态托管 + README + 验收 | ✅ | `2c9b87c` |
+| 最终代码审查与收尾修复 | ✅ | `79decbb` |
 
-## 4. 已完成任务中确立的关键约定
+## 3. 后端接口（前端已按此对接）
 
-- `packages/shared` 只导出 TS 源码（`exports: "./src/index.ts"`），server 用 tsup 打包（`noExternal: ['@mcpanel/shared']`），web 用 Vite。
-- 相对导入不带 `.js` 后缀（`moduleResolution: Bundler`）。
-- 测试数据库：`apps/server/test/helpers/db.ts` 的 `createTestDb()`（临时目录 + 真实迁移 + seed local 节点，`close()` 幂等）。
-- 工厂：`test/helpers/factory.ts` 的 `insertInstance` / `insertUser`。
-- HTTP 测试用 `app.inject` + `test/helpers/http.ts` 的 `CookieJar`、`json`（Task 10 才用到）。
-- 假服务端：`test/fixtures/fake-server.mjs`，支持 `--root`、`--gbk`、`--crash`、`--exit-after=ms`、`--ignore-stop`，会写 `logs/latest.log` 并响应 stdin 的 `stop`。
-- `npm test -w @mcpanel/server` 的工作目录是 `apps/server`（路径不要依赖 `process.cwd()`）。
+- 认证：`GET /api/auth/status` → `{setupRequired, authenticated, user}`；`POST /api/auth/setup|login|logout|password`；`GET /api/auth/csrf` → `{token}`。
+  写请求需要 `Origin`（或 `Referer`）与 `X-CSRF-Token`；CSRF token 与会话绑定，**登录后旧 token 会返回 403 `CSRF_INVALID`，客户端必须重取 token 并重试一次**（`api/client.ts` 已实现，登录/登出/401 均调用 `clearCsrfToken()`）。
+- 实例：`GET /api/instances` → `{items: InstanceInfo[]}`；`GET/POST/PATCH/DELETE /api/instances[/:id]`；`POST /api/instances/probe`；`POST .../actions/{start|stop|restart|kill|mark-stopped}`（202 + `{state}`）；`GET .../status`；`GET .../logs?lines=`；`GET .../logs/download`（attachment）；`POST .../console/command`。
+  删除体 `{confirmName}`（必须与实例名完全一致，且 `lastState` 为 stopped/crashed）；mark-stopped 体 `{confirm:true}`；PATCH 至少一个字段。
+  `rconStatus` 语义：未启用 RCON → `disabled`；从未探测且已启用 → `unreachable`；只有真正握手成功才是 `connected`。
+- 审计：`GET /api/audit?page&pageSize&action` → `Paginated<AuditEntry>`。
+- 系统：`GET /api/system/overview` → `SystemMetricsSample`（平铺）；`GET /api/health` 免认证。
+- WS `/api/ws`（同源 Cookie + Origin）：客户端 `subscribe|unsubscribe|ping`；服务端 `hello`、`console.snapshot/append/gap`、`instance.state`、`metrics.sample`（样本在 `sample` 字段内）、`notification`、`pong`、`error`。阶段 1 订阅 `instance:*:players` 或 `task:*` 会收到 `error`（阶段 2/3 提供）。
+- 统一错误体 `{error:{code,message,details}}`；未登录 `401 AUTH_REQUIRED`。
+
+## 4. 测试与工具约定
+
+- `test/helpers/db.ts` → `createTestDb()`（临时目录 + 真实迁移 + seed local 节点，`close()` 幂等）。
+- `test/helpers/factory.ts` → `insertInstanceRow / insertInstance / insertUser`（rootPathKey 由 `toRootKey` 推导）。
+- `test/helpers/http.ts` → `CookieJar`、`json<T>()`、`TEST_ORIGIN = 'http://localhost:80'`。
+- 假服务端 `test/fixtures/fake-server.mjs`：支持 `--root`、`--gbk`、`--crash`、`--exit-after=ms`、`--ignore-stop`，写 `logs/latest.log` 并响应 stdin 的 `stop`。注意：stdin 关闭时它会自然退出，因此在面板之外手工拉起做孤儿测试需要保持 stdin 打开。
+- 假 RCON `test/fixtures/fake-rcon.mjs`（+ `.d.mts`）：`startFakeRcon({password, port, saveAllDelayMs})`。
+- WS 测试用带缓冲队列的 `TestSocket`；`apps/web` 用 `FakeWebSocket`（`test/realtime-connection.test.ts`）验证引用计数、退订、登出清空与"旧 socket 迟到 close 不影响新 socket"。
+- `npm test -w @mcpanel/server` 的 cwd 是 `apps/server`，路径必须靠 `import.meta.url` 或仓库根解析（`.env`、`DATA_DIR`、`migrationsDir`、`webDistDir` 都已如此）。
+- 前端测试约定：涉及 `useMutation/useQuery` 的组件测试必须包 `QueryClientProvider`；`vi.mock('../src/api/client')` 要提供 `api/ApiError/clearCsrfToken/UNAUTHORIZED_EVENT`；`Field` 的 hint 渲染在 `<label>` 外，否则 `getByLabelText('服务器目录')` 会因标签文本含提示而匹配失败。
+- Git 提示 LF→CRLF 属正常；`*.sql` 由 `.gitattributes` 固定 LF。
 
 ## 5. 与计划的有意偏差（审查驱动，已提交）
 
-1. **Task 1**：`engines.node` 改为 `>=24.11.0`、`engines.npm >=11.16.0`、`packageManager: npm@11.19.1`；`@types/node ^24`、`typescript ~6.0.3`；新增 `.npmrc`（`strict-allow-scripts=true`）与 `package.json` 的 `allowScripts`（argon2/better-sqlite3/esbuild/fsevents）；ESLint 加 `globals` 并对 `**/*.mjs` 注入 Node globals；`.gitignore` 锚定 `/data/`、`/data-dev/`，加 `secret.key`、`.env.*`、`*.tsbuildinfo`；新增 `.gitattributes`（`*.sql text eol=lf`）。
-2. **Task 2**：测试改用规范名 `WS_CHANNEL_PATTERN`，未保留 `channelPattern` 别名。
-3. **Task 3**：`migrationsDir`/`webDistDir` 用 `import.meta.url` 解析（不再依赖 cwd）；`DATA_DIR` 相对路径以仓库根为基准；环境变量空白视为未设置；`MAX_UPLOAD_MB` 必须为正整数；布尔解析大小写不敏感并拒绝非法值；`NODE_ENV` 未识别值报错（默认仍是 development，Task 16 改为 production 默认）；`secret.key` 用 `flag:'wx'` 原子创建；pino 增加 redact、去掉无效的 `dateFormat`。
-4. **Task 4**：所有 `TEXT PRIMARY KEY` 补 `NOT NULL`；`sessions`/`backups` 改为具名唯一索引；`schema.ts` 加 `users_username_unique`；`_migrations` 增加 `checksum` 并在应用前做全量校验（EOL 归一化后取 sha256）；旧 `_migrations`（无 checksum）明确报错要求删除 `data/panel.db`；已应用文件被删除/改名同样报错；**删除 `drizzle.config.ts` 与 `drizzle-kit`**（`0000_init.sql` 是唯一事实来源，测试守卫 `drizzle/` 只允许 `NNNN_*.sql`）。
-5. **Task 5**：`SessionService.resolve()` 只返回 `{id,username,role}` 与 `{id,expiresAt}`，**不含 passwordHash/tokenHash**——Task 10 需要当前密码哈希时必须按 id 查 `users` 表；审计脱敏改为显式规范化黑名单 + `password|token|secret` 后缀（保留 bypass/compass/tokenCount）；分页 clamp 到 1..100 并按 `createdAt DESC, id DESC` 排序；无 logger 时审计写入失败退回 `console.error`。
-6. **Task 6**：`ProbeService` 读 `server.properties`/`eula.txt` 必须走 `sandbox.resolve` + `lstat` 普通文件 + 1MB 上限，异常降级为 warning（`PROPERTIES_UNREADABLE`），不再泄漏目录外内容；`PathSandbox.resolve()` 会校验根目录本身是规范路径（被换成 junction 时拒绝）；Windows 段级拒绝 `:` / 结尾 `.` / 结尾空格；端口非法返回 `false`；Java 版本正则锚定行首；`/` 与 `''` 表示根目录（修了一个把 `.` 当成非法的回归）。
-7. **Task 7**：Windows 使用 `windowsVerbatimArguments: true` 并把整条命令作为 `/c` 的单个参数（Node 默认的转义会让 `cmd.exe /c "...":` 嵌套引号报“文件名、目录名或卷标语法不正确”）；`buildShellCommand` 返回值增加 `verbatim`，并拒绝含 `"` 的根路径；`ConsoleBuffer.capacity` 公开；`since(0)` 返回 snapshot、仅在缓冲区被裁剪时 `gap: true`。
+后端（1–10）保持不变，见提交历史；新增：
 
-## 6. 尚未处理的已知小问题（可留到最终审查）
+11. **Task 3 收尾**：`NODE_ENV` 未设置时默认 **production**（显式非法值仍报错），`scripts/dev.mjs` 显式注入 `NODE_ENV=development`；`Field` 提示移出 label；`ConfirmDialog` 增加 `confirmDisabled`。
+12. **Task 13**：`api/client.ts` 额外导出 `downloadFile()`（blob + `<a download>`），日志下载不再用 `window.location`，避免会话过期时把 SPA 替换成 JSON 页面；`main.tsx` 的 QueryClient 对 401/403 不重试；`useRealtime` 增加 `subscribed` 标志（没有订阅时不谎报"连接已断开"），并在 `apply` 里把服务端 `notification` 转成 toast（计划原本会静默丢弃）。
+13. **Task 14**：纳管对话框用 label/value 分栏渲染探测摘要（便于断言与读屏），并在 `probe.rootPath !== rootPath` 时禁用"创建实例"并提示重新检测；实例名/启动命令/停止超时在前端先校验；登录成功后的 `next` 只接受站内绝对路径（防开放重定向）。
+14. **Task 15**：控制台行渲染时间戳并改用主题变量 `--console-bg/--console-fg`（计划里写死深色），`warn/error` 用 `--warn/--danger`，`stream==='rcon'` 用主色；命令历史失败时保留输入。
+15. **Task 16**：`shouldServeSpa` 增加"带扩展名的路径不返回 SPA 壳"和 query 剥离；`serveStatic` 仅在 production 开启且缺 `index.html` 时告警；`app.listen` 失败给出端口占用/权限的中文 fatal；`shutdown(reason, exitCode)` 崩溃退出码为 1、二次信号立即退出、10 秒兜底；Fastify `disableRequestLogging`（仪表盘每 15 秒轮询会刷屏）；生产日志同时写滚动文件与 stdout（计划里只有文件，`npm start` 终端看不到任何东西）。
+16. **代码审查修复**（`79decbb`）：
+    - `RconService.statusFor()` 读属性文件失败必须降级为 `unreachable`，否则一个损坏的 `server.properties` 会让 `GET /api/instances` 整体 415（审查者用真实构建复现，属严重回归）。
+    - **`InstanceSupervisor.requireRuntime()` 改为按行惰性播种**：`init()` 之后再纳管的实例没有 runtime 记录，`start` 会抛 `NOT_FOUND`「实例不存在」→ 前端表现为 404，必须重启面板才能启动。这是阶段 1 最严重的功能缺陷，之前所有测试都先 `init()` 再操作，集成 API 测试又用的是 mock supervisor，所以没被发现；已补 `supervisor.test.ts` 回归用例。
+    - 删除实例时调用 `supervisor.forget(id)` + `rcon.invalidate(id)`，避免 runtime/缓冲区泄漏。
+    - 指标采样：一次 `si.processes()` 在 1 秒窗口内被同轮所有实例共享，且每个实例的整棵 PID 树用一次 `pidusage(pids)` 批量取（此前每 PID 一次 wmic + 每实例一次 PowerShell 枚举）。
+    - 仪表盘与实例列表的状态徽章改为订阅 `instance:*:status`，不再停留在首次拉取的值。
 
-- `pino-pretty` 是 devDependency，生产 `--omit=dev` 时不能传 `pretty=true`（index.ts 需按 nodeEnv 决定）。
-- `si.processes()` 较慢，只在恢复探测用；`verifyPid` 对“找到进程但命令行读不到”返回 true。
-- `PathSandbox` 的 lstat 是 check-then-use，写操作存在 TOCTOU 残余风险（已在代码注释中说明）。
-- 计划文档里仍写着 `drizzle.config.ts`、Node 22+ 等旧内容，最终收尾时可一并校正文档。
+## 6. 已知小问题与阶段 2 待办
 
-## 7. 下一步（Task 8 RCON 服务）要点
+- 未做（计划本就未含）：文件管理、`server.properties` 表单、玩家管理、备份/计划任务、`start-panel.bat`、`reset-password.mjs`、Playwright 冒烟。
+- `POST /api/auth/password` 与 `GET /api/auth/me` 已实现且被测试覆盖，但阶段 1 没有前端入口（计划缺 `/settings` 页）；README 的"忘记密码"一节已如实说明。
+- CSP 仍为 `connect-src 'self' ws: wss:`，`style-src` 含 `'unsafe-inline'`：收紧到同源 `ws` 需要确认目标浏览器后再改，属阶段 2 加固项。
+- 构建产物是单个 ~786 kB（gzip 238 kB）chunk，recharts 被登录页一起拉进首屏；实例路由改 `React.lazy` 可显著减小首屏。
+- `Field` 的 hint 未通过 `aria-describedby` 关联；`Dialog` 无 `description` 时 Radix 会告警；`index.html` 用 `<meta name="color-scheme">`（非标准）且 CSS 未声明 `color-scheme`，原生控件配色不随主题；`<html class="dark">` 硬编码会让浅色用户闪一下深色。
+- `PathSandbox.resolve` 是 check-then-use，写操作存在 TOCTOU 残余风险（注释已说明）。
+- `scripts/dev.mjs` 在 Windows 上 `child.kill()` 只杀 `cmd.exe`，可能留下占用 3000/5173 的孙进程。
+- 面板启动时只对 `lastState != stopped` 的实例做孤儿恢复；若外部已经跑着服务器再纳管，面板不会立刻识别为 `orphaned`（阶段 2 可在 probe/create 时补一次恢复）。
+- 计划文档仍有旧描述（`drizzle.config.ts`、Node 22+、`channelPattern`、WS 指标平铺字段），代码以仓库为准。
 
-- 新建 `apps/server/src/services/rcon-service.ts`：按 `InstanceRow` 解析 target（`enable-rcon`/`rcon.port`/`rcon.password`/`server-ip`，实例 `rconHost` 优先），状态机 `disabled|auth_failed|unreachable|connected|disconnected`，5 秒连接超时，密码绝不落库/不进日志。
-- `loadServerProperties(root, sandbox?)` 现在会拒绝符号链接；RCON 调用请传 `sandbox` 或不传（仅 root 内单文件）。
-- 新建 `test/fixtures/fake-rcon.mjs`（最小 RCON 协议：type 3 认证，type 2 命令；密码错误回 id=-1 再断连）。
-- Task 9 需要 `rcon.test(row)`、`rcon.send(row,'stop')`、`getCachedStatus(id)`、`invalidate(id)`、`closeAll()`。
-- 注意 rcon-client 认证失败的错误文本可能不含 auth/password，若被判为 `unreachable` 需要按实际报错补匹配。
+## 7. 下一步建议
+
+1. 先把 `phase1-core` 合并或提 PR 到 `main`（尚未合并）。
+2. 用 `superpowers:writing-plans` 基于规格的阶段 2 章节写计划：文件管理 + 配置编辑 + 玩家管理 + `/settings`（改密码）+ 上述审查遗留小项。
+3. 阶段 2 开工前先补一条端到端冒烟（Playwright 或脚本），把"纳管→启动→控制台→停止"固化为可重跑的检查，避免同类 runtime 缺陷再次只在手工验收里暴露。

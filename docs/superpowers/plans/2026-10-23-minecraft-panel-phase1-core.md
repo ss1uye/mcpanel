@@ -8279,3 +8279,21 @@ git commit -m "feat: add production entry, SPA hosting, README and phase 1 accep
 - 阶段 1 明确不包含玩家/文件/配置/备份/计划 UI 与 API；这些在阶段 2、3 计划中补齐，避免半成品入口。
 - 目录不是 git 仓库，Task 1 会执行 `git init`；提交步骤按任务拆分。
 - 与规格的已确认实现差异：`NodeDriver` 在阶段 1 只覆盖进程、只读文件与路径校验，完整接口在阶段 2/3 扩展；RCON 由 `RconService` 承担（规格服务层同样列出 RCON）；WS 指标消息用 `sample` 嵌套承载复用类型，频道与字段语义不变；补充了规格前端要求但 API 表遗漏的 `GET /api/instances/:id/logs/download`。
+
+## 执行结果与计划修正（16 个任务完成后回填）
+
+阶段 1 已按上述任务全部执行完毕（`phase1-core` 分支，收尾提交 `79decbb`），细节与最新偏差记录见 `docs/superpowers/plans/HANDOFF-phase1.md`。执行过程中本计划本身被证明需要修正的地方：
+
+- **Task 3 的 `NODE_ENV` 推导**：计划要求"未设置即 production"的三元写法会静默吞掉拼写错误，实现改为"未设置 → production，显式非法值 → 抛错"，并由 `scripts/dev.mjs` 显式注入 development。
+- **Task 13 的 `Field` 组件**：提示文字放在 `<label>` 内会让 `getByLabelText('服务器目录')` 匹配失败，也污染了标签的可访问名；实现把提示移到 label 外。
+- **Task 13/14 的示例断言**：`screen.getByText('Java 21')` 在"标签：值"同元素的写法下永远匹配不到，实现改为标签与值分栏渲染。
+- **Task 14 的对话框测试**：计划里的测试没有包 `QueryClientProvider`，`useQueryClient` 会直接抛错；实现补上，并增加"改目录后必须重新检测"的门禁。
+- **Task 15 的控制台样式**：计划把终端配色写死为深色，与面板自带的 `--console-bg/--console-fg` 主题变量冲突，实现改用变量。
+- **Task 16 的日志与静态托管**：计划只写滚动文件，导致 `npm start` 终端零输出（含 fatal）；实现改为 stdout + 文件双写，并在缺构建产物时告警。
+- **计划未覆盖、由真实浏览器验收与代码审查发现的缺陷**（都已修复并加回归测试）：
+  1. `init()` 之后纳管的实例没有 runtime 记录，启动返回 404「实例不存在」——必须重启面板才能启动，是最严重的功能缺陷；
+  2. 列表接口内联读取 `server.properties` 推导 RCON 状态，一个损坏文件会让整个实例列表 415；
+  3. 实例指标只测壳进程（cmd.exe），真实模组服的 JVM 是子进程，内存/CPU 严重偏低；
+  4. 仪表盘与实例列表徽章不订阅 `instance:*:status`，状态永久停在首次拉取值；
+  5. WS `notification` 帧被静默丢弃、连接断开没有任何提示。
+- 教训：Task 9/11 的集成测试用 mock supervisor 覆盖了动作路由，掩盖了 1；后续阶段应为"纳管→启动→停止"补一条端到端冒烟。
