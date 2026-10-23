@@ -14,4 +14,21 @@ describe('password', () => {
     expect(() => validatePassword('a'.repeat(129))).toThrow(/128/);
     expect(() => validatePassword('a'.repeat(12))).not.toThrow();
   });
+
+  it('rejects hashing passwords shorter than 12 characters', () => {
+    expect(() => hashPassword('short')).toThrow(/12/);
+    expect(() => hashPassword('a'.repeat(11))).toThrow(/12/);
+  });
+
+  it('uses a unique salt for every hash of the same password', async () => {
+    const first = await hashPassword('correct horse battery');
+    const second = await hashPassword('correct horse battery');
+    expect(first).not.toBe(second);
+    expect(await verifyPassword(first, 'correct horse battery')).toBe(true);
+    expect(await verifyPassword(second, 'correct horse battery')).toBe(true);
+  });
+
+  it('returns false for a malformed hash', async () => {
+    await expect(verifyPassword('not-a-valid-argon2-hash', 'correct horse battery')).resolves.toBe(false);
+  });
 });

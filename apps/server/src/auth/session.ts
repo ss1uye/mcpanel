@@ -1,16 +1,22 @@
 import crypto from 'node:crypto';
-import { and, eq, gt, lt, ne } from 'drizzle-orm';
+import { and, eq, gt, lte, ne } from 'drizzle-orm';
 import { SESSION_TTL_MS } from '@mcpanel/shared';
 import type { DB } from '../db/client';
-import { sessions, users, type SessionRow, type UserRow } from '../db/schema';
+import { sessions, users } from '../db/schema';
 
 export function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+export interface SessionUser {
+  id: string;
+  username: string;
+  role: 'admin';
+}
+
 export interface ResolvedSession {
-  session: SessionRow;
-  user: UserRow;
+  session: { id: string; expiresAt: number };
+  user: SessionUser;
 }
 
 export class SessionService {
@@ -35,7 +41,10 @@ export class SessionService {
   resolve(token: string): ResolvedSession | null {
     return (
       this.db
-        .select({ session: sessions, user: users })
+        .select({
+          session: { id: sessions.id, expiresAt: sessions.expiresAt },
+          user: { id: users.id, username: users.username, role: users.role },
+        })
         .from(sessions)
         .innerJoin(users, eq(sessions.userId, users.id))
         .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, Date.now())))
@@ -55,6 +64,6 @@ export class SessionService {
   }
 
   cleanupExpired(): number {
-    return this.db.delete(sessions).where(lt(sessions.expiresAt, Date.now())).run().changes;
+    return this.db.delete(sessions).where(lte(sessions.expiresAt, Date.now())).run().changes;
   }
 }
