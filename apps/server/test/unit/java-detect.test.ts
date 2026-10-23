@@ -9,6 +9,13 @@ describe('java detection', () => {
     expect(parseJavaMajor('not a java version')).toBeNull();
   });
 
+  it('ignores version-like noise outside an actual version line', () => {
+    expect(parseJavaMajor('Picked up JAVA_TOOL_OPTIONS: -Dfoo=version "1"')).toBeNull();
+    expect(
+      parseJavaMajor('Picked up JAVA_TOOL_OPTIONS: -Dfoo=version "1"\nopenjdk version "17.0.2" 2024-01-16'),
+    ).toBe(17);
+  });
+
   it('builds unique candidates with javaPath first', () => {
     const candidates = javaCandidates('/custom/java', { JAVA_HOME: '/jdk' });
     expect(candidates[0]).toBe('/custom/java');

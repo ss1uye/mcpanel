@@ -12,4 +12,13 @@ describe('isPortFree', () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     expect(await isPortFree(address.port, '127.0.0.1')).toBe(true);
   });
+
+  it('treats invalid, non-integer and out-of-range ports as not free', async () => {
+    expect(await isPortFree(0)).toBe(false);
+    expect(await isPortFree(65536)).toBe(false);
+    expect(await isPortFree(70000)).toBe(false);
+    expect(await isPortFree(25565.5)).toBe(false);
+    expect(await isPortFree(Number.NaN)).toBe(false);
+    expect(await isPortFree(Number.POSITIVE_INFINITY)).toBe(false);
+  });
 });

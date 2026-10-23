@@ -50,10 +50,22 @@ export class PathSandbox {
   }
 
   async resolve(root: string, relPath: string): Promise<string> {
+    const canonicalRoot = path.resolve(root);
+    let realRoot: string;
+    try {
+      realRoot = await fs.realpath(canonicalRoot);
+    } catch {
+      throw new AppError('INVALID_ROOT', '实例根目录不存在或无法访问');
+    }
+    if (toRootKey(realRoot) !== toRootKey(canonicalRoot)) {
+      await this.assertCanonicalRoot(canonicalRoot);
+    }
+    // The lstat walk below is check-then-use: callers performing writes must not
+    // assume atomic protection against a concurrent symlink swap (Node lacks O_NOFOLLOW).
     const normalized = this.normalizeRelative(relPath);
-    const target = path.resolve(root, ...normalized.split('/').filter(Boolean));
-    if (!isWithin(root, target)) throw new AppError('PATH_OUTSIDE_ROOT', '路径越界');
-    await this.assertNoSymlink(root, target);
+    const target = path.resolve(canonicalRoot, ...normalized.split('/').filter(Boolean));
+    if (!isWithin(canonicalRoot, target)) throw new AppError('PATH_OUTSIDE_ROOT', '路径越界');
+    await this.assertNoSymlink(canonicalRoot, target);
     return target;
   }
 
@@ -67,7 +79,29 @@ export class PathSandbox {
     if (normalized === '..' || normalized.startsWith('../') || path.posix.isAbsolute(normalized)) {
       throw new AppError('PATH_OUTSIDE_ROOT', '路径越界');
     }
+    if (process.platform === 'win32') {
+      for (const segment of normalized.split('/')) {
+        // Reject NTFS alternate data streams and trailing dot/space aliases.
+        if (segment.includes(':') || segment.endsWith('.') || segment.endsWith(' ')) {
+          throw new AppError('PATH_OUTSIDE_ROOT', '路径非法');
+        }
+      }
+    }
     return normalized === '.' ? '' : normalized;
+  }
+
+  private async assertCanonicalRoot(canonicalRoot: string): Promise<void> {
+    // Windows realpath() expands 8.3 short names (e.g. ADMINI~1), so a safe
+    // directory can differ from its canonical spelling. Accept the difference
+    // only when no component of the supplied root is a symlink or junction.
+    try {
+      await this.assertNoSymlink(path.parse(canonicalRoot).root, canonicalRoot);
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'SYMLINK_NOT_ALLOWED') {
+        throw new AppError('SYMLINK_NOT_ALLOWED', '实例根目录已被替换或不是规范路径');
+      }
+      throw error;
+    }
   }
 
   private async assertNoSymlink(root: string, target: string): Promise<void> {

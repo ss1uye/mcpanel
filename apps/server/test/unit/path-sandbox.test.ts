@@ -63,4 +63,24 @@ describe('PathSandbox', () => {
     await fs.symlink(outside, path.join(root, 'link'), process.platform === 'win32' ? 'junction' : 'dir');
     await expect(new PathSandbox(dataDir).resolve(root, 'link/secret.txt')).rejects.toMatchObject({ code: 'SYMLINK_NOT_ALLOWED' });
   });
+
+  it('rejects a root that is itself a symlink or junction', async () => {
+    const dataDir = await temp();
+    const parent = await temp();
+    const outside = await temp();
+    const link = path.join(parent, 'root-link');
+    await fs.symlink(outside, link, process.platform === 'win32' ? 'junction' : 'dir');
+    await expect(new PathSandbox(dataDir).resolve(link, 'server.properties')).rejects.toMatchObject({
+      code: 'SYMLINK_NOT_ALLOWED',
+    });
+  });
+
+  it.runIf(process.platform === 'win32')('rejects alternate data streams and trailing dot/space segments', async () => {
+    const dataDir = await temp();
+    const root = await temp();
+    const sandbox = new PathSandbox(dataDir);
+    for (const rel of ['file.txt:stream', 'trailing.', 'trailing ', 'dir./file.txt']) {
+      await expect(sandbox.resolve(root, rel)).rejects.toMatchObject({ code: 'PATH_OUTSIDE_ROOT' });
+    }
+  });
 });

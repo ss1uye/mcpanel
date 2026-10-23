@@ -9,7 +9,7 @@ export interface JavaInfo {
 export type JavaExec = (command: string) => Promise<string>;
 
 export function parseJavaMajor(output: string): number | null {
-  const match = output.match(/version "(?:1\.)?(\d+)/);
+  const match = output.match(/^(?:openjdk|java) version "(?:1\.)?(\d+)/im);
   return match ? Number(match[1]) : null;
 }
 

@@ -49,4 +49,123 @@ describe('ProbeService', () => {
       expect.arrayContaining(['EULA_NOT_ACCEPTED', 'RCON_PASSWORD_EMPTY']),
     );
   });
+
+  it('falls back on invalid ports and compares boolean values case-insensitively', async () => {
+    const dataDir = await temp();
+    const root = await temp();
+    await fs.writeFile(
+      path.join(root, 'server.properties'),
+      'server-port=0x10\nrcon.port=70000\nenable-rcon=TRUE\nonline-mode=FALSE\n',
+    );
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.detected.serverPort).toBe(25565);
+    expect(result.detected.rconPort).toBe(25575);
+    expect(result.detected.enableRcon).toBe(true);
+    expect(result.detected.onlineMode).toBe(false);
+  });
+
+  it('warns instead of failing when server.properties is a directory', async () => {
+    const dataDir = await temp();
+    const root = await temp();
+    await fs.mkdir(path.join(root, 'server.properties'));
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.valid).toBe(true);
+    expect(result.detected.levelName).toBe('world');
+    expect(result.detected.serverPort).toBe(25565);
+    expect(result.warnings.map((warning) => warning.code)).toContain('PROPERTIES_UNREADABLE');
+  });
+
+  it('warns and falls back to defaults when server.properties is missing', async () => {
+    const dataDir = await temp();
+    const root = await temp();
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.detected.levelName).toBe('world');
+    expect(result.detected.serverPort).toBe(25565);
+    expect(result.detected.rconPort).toBe(25575);
+    expect(result.warnings.map((warning) => warning.code)).toContain('PROPERTIES_UNREADABLE');
+  });
+
+  it.runIf(process.platform === 'win32')('warns instead of failing when server.properties is a junction', async () => {
+    const dataDir = await temp();
+    const root = await temp();
+    const outside = await temp();
+    await fs.symlink(outside, path.join(root, 'server.properties'), 'junction');
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.valid).toBe(true);
+    expect(result.detected.levelName).toBe('world');
+    expect(result.warnings.map((warning) => warning.code)).toContain('PROPERTIES_UNREADABLE');
+  });
+
+  it('does not leak an outside properties file through a file symlink', async (context) => {
+    const dataDir = await temp();
+    const root = await temp();
+    const outside = await temp();
+    const secret = path.join(outside, 'server.properties');
+    await fs.writeFile(secret, 'level-name=leaked\nserver-port=12345\n');
+    try {
+      await fs.symlink(secret, path.join(root, 'server.properties'), 'file');
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'EPERM' || code === 'EACCES') context.skip(`file symlinks unavailable: ${code}`);
+      throw error;
+    }
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.detected.levelName).toBe('world');
+    expect(result.detected.serverPort).toBe(25565);
+    expect(result.warnings.map((warning) => warning.code)).toContain('PROPERTIES_UNREADABLE');
+    expect(JSON.stringify(result)).not.toContain('leaked');
+  });
+
+  it('does not accept eula=true through a symlinked eula.txt', async (context) => {
+    const dataDir = await temp();
+    const root = await temp();
+    const outside = await temp();
+    const secret = path.join(outside, 'eula.txt');
+    await fs.writeFile(secret, 'eula=true\n');
+    try {
+      await fs.symlink(secret, path.join(root, 'eula.txt'), 'file');
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'EPERM' || code === 'EACCES') context.skip(`file symlinks unavailable: ${code}`);
+      throw error;
+    }
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.detected.eula).toBe(false);
+    expect(result.warnings.map((warning) => warning.code)).toContain('EULA_NOT_ACCEPTED');
+  });
+
+  it('accepts eula with surrounding whitespace and mixed case', async () => {
+    const dataDir = await temp();
+    const root = await temp();
+    await fs.writeFile(path.join(root, 'eula.txt'), '  EUla = true  \n');
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.detected.eula).toBe(true);
+    expect(result.warnings.map((warning) => warning.code)).not.toContain('EULA_NOT_ACCEPTED');
+  });
+
+  it('accepts eula with CRLF line endings', async () => {
+    const dataDir = await temp();
+    const root = await temp();
+    await fs.writeFile(path.join(root, 'eula.txt'), '#By changing the setting below\r\neula=true\r\n');
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.detected.eula).toBe(true);
+  });
+
+  it('does not match eula=true split across lines', async () => {
+    const dataDir = await temp();
+    const root = await temp();
+    await fs.writeFile(path.join(root, 'eula.txt'), 'eula=\ntrue\n');
+    const service = new ProbeService(new PathSandbox(dataDir), async () => null);
+    const result = await service.probe(root, []);
+    expect(result.detected.eula).toBe(false);
+    expect(result.warnings.map((warning) => warning.code)).toContain('EULA_NOT_ACCEPTED');
+  });
 });
