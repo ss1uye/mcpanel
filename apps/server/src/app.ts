@@ -9,14 +9,26 @@ import type { SessionService } from './auth/session';
 import type { AppConfig } from './config';
 import type { DB } from './db/client';
 import { silentLogger } from './logger';
+import { registerAuditRoutes } from './routes/audit';
 import { registerAuthRoutes } from './routes/auth';
+import { registerInstanceRoutes } from './routes/instances';
+import type { LocalNodeDriver } from './nodes/local-driver';
 import type { AuditService } from './services/audit-service';
+import type { InstanceService } from './services/instance-service';
+import type { InstanceSupervisor } from './services/instance-supervisor';
+import type { ProbeService } from './services/probe-service';
+import type { RconService } from './services/rcon-service';
 import { AppError } from './utils/errors';
 
 export interface AppServices {
   sessions: SessionService;
   audit: AuditService;
   loginThrottle: LoginThrottle;
+  instances?: InstanceService;
+  supervisor?: InstanceSupervisor;
+  rcon?: RconService;
+  driver?: LocalNodeDriver;
+  probe?: ProbeService;
 }
 
 export interface BuildAppOptions {
@@ -109,6 +121,20 @@ export async function buildApp(
     audit: services.audit,
     loginThrottle: services.loginThrottle,
   });
+
+  registerAuditRoutes(app, { sessions: services.sessions, audit: services.audit });
+
+  if (services.instances && services.supervisor && services.rcon && services.driver && services.probe) {
+    registerInstanceRoutes(app, {
+      sessions: services.sessions,
+      audit: services.audit,
+      instances: services.instances,
+      supervisor: services.supervisor,
+      rcon: services.rcon,
+      driver: services.driver,
+      probe: services.probe,
+    });
+  }
 
   return app;
 }
