@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie';
 import csrf from '@fastify/csrf-protection';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { PANEL_VERSION } from '@mcpanel/shared';
@@ -12,13 +13,16 @@ import { silentLogger } from './logger';
 import { registerAuditRoutes } from './routes/audit';
 import { registerAuthRoutes } from './routes/auth';
 import { registerInstanceRoutes } from './routes/instances';
+import { registerSystemRoutes } from './routes/system';
 import type { LocalNodeDriver } from './nodes/local-driver';
 import type { AuditService } from './services/audit-service';
 import type { InstanceService } from './services/instance-service';
 import type { InstanceSupervisor } from './services/instance-supervisor';
+import type { MetricsService } from './services/metrics-service';
 import type { ProbeService } from './services/probe-service';
 import type { RconService } from './services/rcon-service';
 import { AppError } from './utils/errors';
+import { WsHub } from './ws/hub';
 
 export interface AppServices {
   sessions: SessionService;
@@ -29,6 +33,7 @@ export interface AppServices {
   rcon?: RconService;
   driver?: LocalNodeDriver;
   probe?: ProbeService;
+  metrics?: MetricsService;
 }
 
 export interface BuildAppOptions {
@@ -64,6 +69,7 @@ export async function buildApp(
   });
 
   await app.register(cookie);
+  await app.register(websocket);
   await app.register(csrf, {
     cookieOpts: { path: '/', httpOnly: true, sameSite: 'lax', secure: config.cookieSecure },
     getUserInfo: csrfUserInfo,
@@ -135,6 +141,23 @@ export async function buildApp(
       probe: services.probe,
     });
   }
+
+  let hub: WsHub | null = null;
+  if (services.metrics && services.supervisor) {
+    hub = new WsHub({
+      db,
+      sessions: services.sessions,
+      supervisor: services.supervisor,
+      metrics: services.metrics,
+    });
+    hub.register(app);
+    registerSystemRoutes(app, { sessions: services.sessions, metrics: services.metrics });
+  }
+
+  app.addHook('onClose', async () => {
+    hub?.closeAll();
+    services.metrics?.stop();
+  });
 
   return app;
 }

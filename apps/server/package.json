@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
+    "@types/pidusage": "^2.0.5",
     "@types/ws": "^8.18.2",
     "pino-pretty": "^13.2.0"
   }

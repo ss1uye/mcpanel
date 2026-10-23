@@ -156,4 +156,5 @@ export type ServerWsMessage =
   | { type: 'metrics.sample'; target: 'instance'; instanceId: string; ts: string; sample: ProcessMetricsSample }
   | { type: 'players.update'; instanceId: string; online: string[]; max: number; rconStatus: RconStatus }
   | { type: 'notification'; level: 'info' | 'warning' | 'error'; message: string }
+  | { type: 'pong' }
   | { type: 'error'; code: string; message: string };
