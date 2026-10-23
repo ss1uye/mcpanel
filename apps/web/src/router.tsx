@@ -1,0 +1,52 @@
+import { useQuery } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import type { AuthStatus } from '@mcpanel/shared';
+import { api } from './api/client';
+import { Spinner } from './components/ui';
+import { AppShell } from './layouts/AppShell';
+import { DashboardPage } from './pages/DashboardPage';
+import { LoginPage } from './pages/LoginPage';
+import { SetupPage } from './pages/SetupPage';
+
+function AuthGate({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const status = useQuery({
+    queryKey: ['auth', 'status'],
+    queryFn: () => api.get<AuthStatus>('/auth/status'),
+    retry: false,
+  });
+  if (status.isLoading) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <Spinner />
+      </div>
+    );
+  }
+  if (status.data?.setupRequired) return <Navigate to="/setup" replace />;
+  if (!status.data?.authenticated) {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`);
+    return <Navigate to={`/login?next=${next}`} replace />;
+  }
+  return <>{children}</>;
+}
+
+export function AppRouter() {
+  return (
+    <Routes>
+      <Route path="/setup" element={<SetupPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/"
+        element={
+          <AuthGate>
+            <AppShell />
+          </AuthGate>
+        }
+      >
+        <Route index element={<DashboardPage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f4f6f3;
+  --surface: #ffffff;
+  --surface-2: #e9eee8;
+  --border: #d7ded5;
+  --fg: #17201a;
+  --muted: #64716a;
+  --primary: #15803d;
+  --primary-contrast: #ffffff;
+  --primary-soft: #dcfce7;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --console-bg: #f7f8f6;
+  --console-fg: #1f2a24;
+}
+
+.dark {
+  --bg: #0b0f0d;
+  --surface: #111713;
+  --surface-2: #18211b;
+  --border: #27322b;
+  --fg: #e8f0ea;
+  --muted: #94a498;
+  --primary: #4ade80;
+  --primary-contrast: #07130b;
+  --primary-soft: #14351f;
+  --danger: #f87171;
+  --danger-soft: #3b1414;
+  --warn: #fbbf24;
+  --warn-soft: #3a2a0a;
+  --console-bg: #050806;
+  --console-fg: #cfe3d4;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.console-font {
+  font-family: ui-monospace, Consolas, "Courier New", monospace;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--primary-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
