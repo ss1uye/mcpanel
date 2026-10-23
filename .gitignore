@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+data-dev/
+.env
+*.log
+coverage/
+test-results/
+playwright-report/
