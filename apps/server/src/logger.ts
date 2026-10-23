@@ -1,15 +1,34 @@
 import path from 'node:path';
 import pino, { type Logger } from 'pino';
 
+const redactPaths = [
+  'sessionSecret',
+  'config.sessionSecret',
+  '*.sessionSecret',
+  'password',
+  '*.password',
+  '*.*.password',
+  'passwordHash',
+  '*.passwordHash',
+  '*.*.passwordHash',
+  'token',
+  '*.token',
+  '*.*.token',
+  'secret',
+  '*.secret',
+  '*.*.secret',
+];
+
 export function createLogger(dataDir: string, level: string, pretty: boolean): Logger {
+  const options = { level, redact: { paths: redactPaths, censor: '[redacted]' } };
   if (pretty) {
     return pino({
-      level,
+      ...options,
       transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:standard' } },
     });
   }
   return pino(
-    { level },
+    options,
     pino.transport({
       target: 'pino-roll',
       options: {
@@ -17,7 +36,6 @@ export function createLogger(dataDir: string, level: string, pretty: boolean): L
         size: '10m',
         limit: { count: 5 },
         mkdir: true,
-        dateFormat: 'yyyy-MM-dd',
       },
     }),
   );

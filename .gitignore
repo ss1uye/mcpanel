@@ -5,6 +5,7 @@ dist/
 .env
 .env.*
 !.env.example
+secret.key
 *.log
 coverage/
 test-results/
