@@ -42,6 +42,8 @@ export function CommandInput({
       localStorage.setItem(historyKey(instanceId), JSON.stringify(next));
       setValue('');
       setIndex(-1);
+    } catch {
+      // The caller surfaces the error; keeping the text lets the operator retry it.
     } finally {
       setSending(false);
     }

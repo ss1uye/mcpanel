@@ -9,15 +9,32 @@ import type { InstanceSupervisor } from './instance-supervisor';
 
 const SAMPLE_INTERVAL_MS = 3000;
 const HISTORY_SIZE = 60;
-
-export interface MetricsCollector {
-  system(dataDir: string): Promise<SystemMetricsSample>;
-  instance(pid: number, rootPath: string): Promise<ProcessMetricsSample>;
-}
+/** One Windows process enumeration costs a PowerShell run, so instances in the same tick share it. */
+const PROCESS_LIST_TTL_MS = 1000;
 
 interface TreeProcess {
   pid: number;
   parentPid: number;
+}
+
+let processList: { at: number; list: TreeProcess[] } | null = null;
+
+async function treePids(rootPid: number): Promise<number[]> {
+  const now = Date.now();
+  if (!processList || now - processList.at > PROCESS_LIST_TTL_MS) {
+    try {
+      const { list } = await si.processes();
+      processList = { at: now, list: list.map(({ pid, parentPid }) => ({ pid, parentPid })) };
+    } catch {
+      processList = null;
+    }
+  }
+  return processList ? collectTreePids(processList.list, rootPid) : [rootPid];
+}
+
+export interface MetricsCollector {
+  system(dataDir: string): Promise<SystemMetricsSample>;
+  instance(pid: number, rootPath: string): Promise<ProcessMetricsSample>;
 }
 
 /**
@@ -45,15 +62,6 @@ export function collectTreePids(processes: TreeProcess[], rootPid: number): numb
   return pids;
 }
 
-async function treePids(rootPid: number): Promise<number[]> {
-  try {
-    const { list } = await si.processes();
-    return collectTreePids(list, rootPid);
-  } catch {
-    return [rootPid];
-  }
-}
-
 export const defaultCollector: MetricsCollector = {
   async system(dataDir) {
     const [load, mem, disk, time] = await Promise.all([si.currentLoad(), si.mem(), diskUsage(dataDir), si.time()]);
@@ -73,12 +81,14 @@ export const defaultCollector: MetricsCollector = {
   },
   async instance(pid, rootPath) {
     const pids = await treePids(pid);
-    const usages = await Promise.all(pids.map((candidate) => pidusage(candidate).catch(() => null)));
-    const measured = usages.filter((usage) => usage !== null);
+    const [usage, disk] = await Promise.all([
+      pidusage(pids).catch(() => null),
+      diskUsage(rootPath),
+    ]);
+    const measured = Object.values(usage ?? {}).filter((stat) => Number.isFinite(stat.cpu) && Number.isFinite(stat.memory));
     if (measured.length === 0) throw new Error(`进程 ${pid} 无法采样`);
-    const disk = await diskUsage(rootPath);
-    const cpu = measured.reduce((total, usage) => total + usage.cpu, 0);
-    const memBytes = measured.reduce((total, usage) => total + usage.memory, 0);
+    const cpu = measured.reduce((total, stat) => total + stat.cpu, 0);
+    const memBytes = measured.reduce((total, stat) => total + stat.memory, 0);
     return {
       ts: new Date().toISOString(),
       cpu: Number(cpu.toFixed(1)),

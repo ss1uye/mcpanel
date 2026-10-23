@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import type { InstanceOutletContext } from '../../layouts/InstanceLayout';
-import { api, ApiError } from '../../api/client';
+import { api, ApiError, downloadFile } from '../../api/client';
 import { CommandInput } from '../../components/CommandInput';
 import { ConsoleViewer } from '../../components/ConsoleViewer';
 import { ErrorState, Notice, toast } from '../../components/ui';
@@ -28,16 +28,19 @@ export function ConsoleTab() {
       <ConsoleViewer
         lines={consoleState.lines}
         gap={consoleState.gap}
-        onDownload={() => {
-          window.location.assign(`/api/instances/${instance.id}/logs/download`);
+        onDownload={async () => {
+          try {
+            await downloadFile(`/instances/${instance.id}/logs/download`, 'latest.log');
+          } catch (cause) {
+            toast(cause instanceof ApiError ? cause.message : '日志下载失败', 'error');
+          }
         }}
       />
       <CommandInput
+        key={instance.id}
         instanceId={instance.id}
         disabled={!running}
-        onSend={async (command) => {
-          await send.mutateAsync(command).catch(() => undefined);
-        }}
+        onSend={(command) => send.mutateAsync(command).then(() => undefined)}
       />
     </div>
   );

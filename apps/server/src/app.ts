@@ -79,6 +79,8 @@ export async function buildApp(
   const app = Fastify({
     loggerInstance: options.logger ?? silentLogger(),
     trustProxy: config.trustProxy,
+    // The dashboard polls system metrics every 15s; per-request lines would drown real signals.
+    disableRequestLogging: true,
   });
 
   await app.register(cookie);

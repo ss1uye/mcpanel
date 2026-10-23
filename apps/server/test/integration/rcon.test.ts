@@ -108,6 +108,17 @@ describe('RconService', () => {
     expect(await connected.service.statusFor(connected.instance)).toBe('connected');
   });
 
+  it('statusFor() degrades instead of throwing when server.properties is unreadable', async () => {
+    const ctx = createTestDb();
+    contexts.push(ctx);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mcpanel-rcon-'));
+    dirs.push(root);
+    await fs.mkdir(path.join(root, 'server.properties'));
+    const instance = insertInstanceRow(ctx.db, { name: 'broken-properties', rootPath: root });
+    const service = new RconService();
+    expect(await service.statusFor(instance)).toBe('unreachable');
+  });
+
   it('throws RCON_UNAVAILABLE when sending to a dead server', async () => {
     const { service, instance } = await setup({ respond: false });
     await expect(service.send(instance, 'list')).rejects.toMatchObject({ code: 'RCON_UNAVAILABLE' });

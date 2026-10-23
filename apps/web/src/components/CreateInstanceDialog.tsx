@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { InstanceInfo, LogEncoding, ProbeResult } from '@mcpanel/shared';
 import { api, ApiError } from '../api/client';
-import { Button, Dialog, ErrorState, Field, Input, Select, toast } from './ui';
+import { Button, Dialog, ErrorState, Field, Input, Notice, Select, toast } from './ui';
 
 function defaultName(rootPath: string): string {
   const parts = rootPath.split(/[\\/]/).filter(Boolean);
@@ -80,6 +80,10 @@ export function CreateInstanceDialog({ open, onOpenChange }: { open: boolean; on
 
   const submit = () => {
     setError(null);
+    if (!probe || probe.rootPath !== rootPath.trim()) {
+      setError('请先检测当前目录');
+      return;
+    }
     if (!name.trim()) {
       setError('请填写实例名称');
       return;
@@ -107,7 +111,11 @@ export function CreateInstanceDialog({ open, onOpenChange }: { open: boolean; on
           <Button variant="secondary" onClick={close}>
             取消
           </Button>
-          <Button disabled={!probe || !rootPath.trim()} loading={createMutation.isPending} onClick={submit}>
+          <Button
+            disabled={!probe || !rootPath.trim() || probe.rootPath !== rootPath.trim()}
+            loading={createMutation.isPending}
+            onClick={submit}
+          >
             创建实例
           </Button>
         </>
@@ -129,6 +137,10 @@ export function CreateInstanceDialog({ open, onOpenChange }: { open: boolean; on
             检测目录
           </Button>
         </div>
+
+        {probe && probe.rootPath !== rootPath.trim() && (
+          <Notice tone="warning">目录已修改，请重新检测后再创建实例。</Notice>
+        )}
 
         {probe && (
           <>

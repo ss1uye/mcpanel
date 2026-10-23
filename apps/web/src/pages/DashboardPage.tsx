@@ -6,7 +6,7 @@ import { api } from '../api/client';
 import { MetricsSparkline } from '../components/MetricsSparkline';
 import { StatusBadge } from '../components/StatusBadge';
 import { EmptyState, ErrorState, Spinner } from '../components/ui';
-import { useInstanceMetrics, useSystemMetrics } from '../stores/realtime';
+import { useInstanceMetrics, useInstanceStatus, useRealtime, useSystemMetrics } from '../stores/realtime';
 import { formatBytes, formatDateTime, formatDuration } from '../utils/format';
 
 function MetricCard({ icon: Icon, label, value, detail }: { icon: typeof Cpu; label: string; value: string; detail?: string }) {
@@ -24,7 +24,9 @@ function MetricCard({ icon: Icon, label, value, detail }: { icon: typeof Cpu; la
 
 function InstanceCard({ instance }: { instance: InstanceInfo }) {
   const samples = useInstanceMetrics(instance.id);
+  const live = useInstanceStatus(instance.id);
   const last = samples.at(-1);
+  const state = live?.state ?? instance.state;
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="flex items-start justify-between gap-3">
@@ -34,7 +36,7 @@ function InstanceCard({ instance }: { instance: InstanceInfo }) {
           </Link>
           <div className="mt-1 truncate text-xs text-[var(--muted)]">{instance.rootPath}</div>
         </div>
-        <StatusBadge state={instance.state} />
+        <StatusBadge state={state} />
       </div>
       <div className="mt-3">
         <MetricsSparkline values={samples.map((sample) => sample.cpu)} />
@@ -62,14 +64,17 @@ export function DashboardPage() {
     queryFn: () => api.get<Paginated<AuditEntry>>('/audit?page=1&pageSize=10'),
   });
   const liveSystem = useSystemMetrics();
+  const liveStates = useRealtime((state) => state.states);
   const latest = liveSystem.at(-1) ?? overview.data;
   const items = instances.data?.items ?? [];
 
   const warnings: string[] = [];
   for (const instance of items) {
-    if (instance.state === 'unknown') warnings.push(`${instance.name}：状态未知，请检查进程`);
-    if (instance.state === 'orphaned') warnings.push(`${instance.name}：进程未接管，可通过 RCON 停止`);
-    if (instance.state !== 'stopped' && instance.rconStatus === 'disabled') warnings.push(`${instance.name}：未启用 RCON`);
+    const state = liveStates[instance.id]?.state ?? instance.state;
+    if (state === 'unknown') warnings.push(`${instance.name}：状态未知，请检查进程`);
+    if (state === 'orphaned') warnings.push(`${instance.name}：进程未接管，可通过 RCON 停止`);
+    if (state === 'crashed') warnings.push(`${instance.name}：上次运行异常退出`);
+    if (state !== 'stopped' && instance.rconStatus === 'disabled') warnings.push(`${instance.name}：未启用 RCON`);
   }
   if (latest && latest.diskTotalBytes > 0 && latest.diskFreeBytes / latest.diskTotalBytes < 0.1) {
     warnings.push('磁盘剩余空间低于 10%');

@@ -20,7 +20,3 @@ export function StatusBadge({ state }: { state: InstanceState }) {
     </Badge>
   );
 }
-
-export function stateLabel(state: InstanceState): string {
-  return STATES[state].label;
-}

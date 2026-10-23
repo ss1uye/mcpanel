@@ -4,10 +4,22 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { PANEL_VERSION } from '@mcpanel/shared';
 import { api, clearCsrfToken } from '../api/client';
-import { disconnectRealtime } from '../stores/realtime';
+import { disconnectRealtime, useConnectionState, useRealtime } from '../stores/realtime';
 import { useUi } from '../stores/ui';
-import { Button, Toaster } from '../components/ui';
+import { Badge, Button, Toaster } from '../components/ui';
 import { cn } from '../utils/cn';
+
+function ConnectionIndicator() {
+  const connection = useConnectionState();
+  const subscribed = useRealtime((state) => state.subscribed);
+  // Nothing is subscribed on pages like the empty instance list, so "disconnected" would be a lie.
+  if (!subscribed || connection === 'open') return null;
+  return (
+    <Badge tone={connection === 'connecting' ? 'warning' : 'danger'}>
+      {connection === 'connecting' ? '实时连接中…' : '实时连接已断开，正在重试'}
+    </Badge>
+  );
+}
 
 const navigation = [
   { to: '/', label: '总览', icon: LayoutDashboard, end: true },
@@ -72,6 +84,7 @@ export function AppShell() {
         ))}
       </nav>
       <div className="flex flex-col gap-2 border-t border-[var(--border)] p-3 text-xs text-[var(--muted)]">
+        <ConnectionIndicator />
         <div className="flex items-center justify-between">
           <span>v{PANEL_VERSION}</span>
           <button

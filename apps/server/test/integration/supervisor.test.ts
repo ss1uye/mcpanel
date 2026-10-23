@@ -114,6 +114,30 @@ describe('InstanceSupervisor', () => {
     expect(stored?.lastPid).toBeNull();
   }, 40000);
 
+  it('starts an instance onboarded after init() without a panel restart', async () => {
+    await prepare('首个实例');
+    const service = supervisor!;
+
+    const lateRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mcpanel-supervisor-'));
+    await fs.writeFile(path.join(lateRoot, 'eula.txt'), 'eula=true\n');
+    const late = insertInstanceRow(ctx!.db, {
+      name: '后纳管服',
+      rootPath: lateRoot,
+      startCommand: `"${process.execPath}" "${fixture}" --root "${lateRoot}"`,
+      stopTimeoutSec: 10,
+    });
+
+    const started = await service.start(late.id);
+    expect(started.state).toBe('starting');
+    await waitFor(() => service.getStatus(late.id).state === 'running');
+    await service.stop(late.id);
+    expect(service.getStatus(late.id).state).toBe('stopped');
+
+    service.forget(late.id);
+    expect(() => service.getStatus(late.id)).not.toThrow();
+    await rmWithRetry(lateRoot);
+  }, 60000);
+
   it('rejects start while running and stop while stopped', async () => {
     const { instance, supervisor: service } = await prepare('状态检查');
     await service.start(instance.id);

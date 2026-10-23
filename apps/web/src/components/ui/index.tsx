@@ -101,10 +101,6 @@ export function Spinner({ label = '加载中' }: { label?: string }) {
   );
 }
 
-export function PageSection({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4', className)}>{children}</section>;
-}
-
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
   return (
     <div className="rounded-xl border border-dashed border-[var(--border)] p-10 text-center">

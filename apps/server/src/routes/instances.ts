@@ -97,6 +97,8 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
     const input = deleteInstanceSchema.parse(request.body);
     const row = instances.get(request.params.id);
     instances.delete(row, input.confirmName);
+    supervisor.forget(row.id);
+    rcon.invalidate(row.id);
     audit.record({
       userId: request.user?.id,
       action: 'instance.delete',

@@ -93,6 +93,13 @@ export class InstanceSupervisor extends EventEmitter {
     for (const row of rows) await this.recover(row);
   }
 
+  /** Drops all in-memory state for an instance that has been unregistered. */
+  forget(instanceId: string): void {
+    this.runtime.delete(instanceId);
+    this.buffers.delete(instanceId);
+    this.clearTimers(instanceId);
+  }
+
   getStatus(instanceId: string): InstanceStatusSnapshot {
     const row = this.readRow(instanceId);
     const state = this.runtime.get(instanceId);
@@ -432,9 +439,20 @@ export class InstanceSupervisor extends EventEmitter {
   }
 
   private requireRuntime(instanceId: string): RuntimeState {
-    const runtime = this.runtime.get(instanceId);
-    if (!runtime) throw new AppError('NOT_FOUND', '实例不存在');
-    return runtime;
+    const existing = this.runtime.get(instanceId);
+    if (existing) return existing;
+    // Instances onboarded after boot have no init() entry; seed them from their row.
+    const row = this.readRow(instanceId);
+    if (!row) throw new AppError('NOT_FOUND', '实例不存在');
+    const seeded: RuntimeState = {
+      state: row.lastState,
+      pid: row.lastPid,
+      startedAt: row.lastStartedAt,
+      exitCode: row.lastExitCode,
+      error: row.lastError,
+    };
+    this.runtime.set(instanceId, seeded);
+    return seeded;
   }
 
   private move(instanceId: string, action: InstanceAction, patch: Partial<RuntimeState>): void {

@@ -7,6 +7,35 @@ import { api } from '../api/client';
 import { CreateInstanceDialog } from '../components/CreateInstanceDialog';
 import { StatusBadge } from '../components/StatusBadge';
 import { Button, EmptyState, ErrorState, Input, Spinner } from '../components/ui';
+import { useInstanceStatus } from '../stores/realtime';
+
+function InstanceCard({ instance }: { instance: InstanceInfo }) {
+  const live = useInstanceStatus(instance.id);
+  const state = live?.state ?? instance.state;
+  return (
+    <Link
+      to={`/instances/${instance.id}/overview`}
+      className="group rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-[var(--primary)]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate font-medium group-hover:text-[var(--primary)]">{instance.name}</div>
+          <div className="mt-1 truncate text-xs text-[var(--muted)]">{instance.rootPath}</div>
+        </div>
+        <StatusBadge state={state} />
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[var(--muted)]">
+        <span>{(live?.pid ?? instance.pid) ? `PID ${live?.pid ?? instance.pid}` : '无进程'}</span>
+        <span className="console-font max-w-[60%] truncate" title={instance.startCommand}>
+          {instance.startCommand}
+        </span>
+      </div>
+      {(live?.error ?? instance.lastError) && (
+        <div className="mt-2 truncate text-xs text-[var(--danger)]">{live?.error ?? instance.lastError}</div>
+      )}
+    </Link>
+  );
+}
 
 export function InstancesPage() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -49,26 +78,7 @@ export function InstancesPage() {
       ) : items.length > 0 ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {items.map((instance) => (
-            <Link
-              key={instance.id}
-              to={`/instances/${instance.id}/overview`}
-              className="group rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-[var(--primary)]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate font-medium group-hover:text-[var(--primary)]">{instance.name}</div>
-                  <div className="mt-1 truncate text-xs text-[var(--muted)]">{instance.rootPath}</div>
-                </div>
-                <StatusBadge state={instance.state} />
-              </div>
-              <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[var(--muted)]">
-                <span>{instance.pid ? `PID ${instance.pid}` : '无进程'}</span>
-                <span className="console-font max-w-[60%] truncate" title={instance.startCommand}>
-                  {instance.startCommand}
-                </span>
-              </div>
-              {instance.lastError && <div className="mt-2 truncate text-xs text-[var(--danger)]">{instance.lastError}</div>}
-            </Link>
+            <InstanceCard key={instance.id} instance={instance} />
           ))}
         </div>
       ) : (

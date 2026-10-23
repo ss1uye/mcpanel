@@ -47,6 +47,7 @@ async function makeApp() {
     kill: vi.fn(async () => undefined),
     markStopped: vi.fn(async () => undefined),
     sendCommand: vi.fn(async () => undefined),
+    forget: vi.fn(),
     getRecentLines: vi.fn(async () => [
       { seq: 1, ts: new Date().toISOString(), stream: 'stdout', level: 'info', text: 'hello' },
     ]),
@@ -235,5 +236,33 @@ describe('instances API', () => {
     });
     expect(response.statusCode).toBe(409);
     expect(json<{ error: { code: string } }>(response).error.code).toBe('ROOT_OVERLAPS');
+  });
+
+  it('keeps listing healthy instances when one has an unreadable server.properties', async () => {
+    const { app, root, headers, readHeaders } = await makeApp();
+    await app.inject({
+      method: 'POST',
+      url: '/api/instances',
+      headers,
+      payload: { name: '健康服', rootPath: root, startCommand: 'run.bat' },
+    });
+
+    const broken = await fs.mkdtemp(path.join(os.tmpdir(), 'mcpanel-broken-'));
+    roots.push(broken);
+    await fs.writeFile(path.join(broken, 'eula.txt'), 'eula=true\n');
+    await fs.mkdir(path.join(broken, 'server.properties'));
+    const brokenCreated = await app.inject({
+      method: 'POST',
+      url: '/api/instances',
+      headers,
+      payload: { name: '损坏服', rootPath: broken, startCommand: 'run.bat' },
+    });
+    expect(brokenCreated.statusCode).toBe(201);
+
+    const list = await app.inject({ method: 'GET', url: '/api/instances', headers: readHeaders });
+    expect(list.statusCode).toBe(200);
+    const items = json<{ items: { name: string; rconStatus: string }[] }>(list).items;
+    expect(items.map((item) => item.name).sort()).toEqual(['健康服', '损坏服']);
+    expect(items.find((item) => item.name === '损坏服')?.rconStatus).toBe('unreachable');
   });
 });

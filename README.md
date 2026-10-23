@@ -16,7 +16,7 @@
 
 ## 环境要求
 
-- Node.js 22+（推荐 24 LTS，仓库 `engines` 要求 `>=24.11.0`）
+- Node.js 24.11 及以上（`package.json` 的 `engines` 已强制）
 - npm 11.16+（用于依赖安装脚本白名单校验）
 - Windows 10/11 或主流 Linux
 - 同一台机器上已安装 Java 与 Minecraft 服务端
@@ -70,8 +70,10 @@ data/
 ├─ secret.key      自动生成的会话与 CSRF 密钥（勿泄露）
 ├─ backups/        备份（阶段 3）
 ├─ tmp/            临时文件与回滚残留
-└─ logs/panel.log  面板日志（10 MB 轮转）
+└─ logs/panel.N    面板日志（10 MB 轮转，保留 5 份）
 ```
+
+生产模式下日志同时写入该滚动文件和标准输出，方便前台 `npm start` 直接观察。
 
 实例的 `logs/latest.log` 等服务端文件始终留在实例自己的目录里，面板不会写入实例目录之外的位置。
 
@@ -95,6 +97,6 @@ npm run lint
 
 ## 忘记密码
 
-阶段 1 尚未提供重置脚本。忘记密码时可停止面板，删除 `data/panel.db` 中的 `users` 与 `sessions`
-记录（会丢失实例注册信息，建议先备份 `panel.db`），重新打开面板完成初始化。阶段 3 提供
-`scripts/reset-password.mjs`。
+修改密码的接口（`POST /api/auth/password`，会踢掉其他会话）已经实现，但阶段 1 还没有对应的前端入口，
+设置页在阶段 2 提供。在此之前若忘记密码，可停止面板后删除 `data/panel.db` 中的 `users` 与 `sessions`
+记录（会丢失实例注册信息，建议先备份 `panel.db`），再重新初始化。阶段 3 提供 `scripts/reset-password.mjs`。

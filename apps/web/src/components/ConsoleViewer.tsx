@@ -20,8 +20,8 @@ function timestamp(value: string): string {
 
 const LINE_TONES: Record<ConsoleLine['level'], string> = {
   info: '',
-  warn: 'text-amber-300',
-  error: 'text-red-400',
+  warn: 'text-[var(--warn)]',
+  error: 'text-[var(--danger)]',
 };
 
 export function ConsoleViewer({
@@ -104,8 +104,7 @@ export function ConsoleViewer({
         ref={parentRef}
         onScroll={handleScroll}
         role="log"
-        aria-live="polite"
-        className="console-font h-[calc(100vh-19rem)] min-h-64 overflow-auto rounded-lg border border-[var(--border)] bg-[#050806] p-3 text-xs leading-5 text-[#cfe3d4]"
+        className="console-font h-[calc(100vh-19rem)] min-h-64 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--console-bg)] p-3 text-xs leading-5 text-[var(--console-fg)]"
       >
         {filtered.length === 0 ? (
           <div className="text-[var(--muted)]">暂无日志</div>
@@ -127,9 +126,14 @@ export function ConsoleViewer({
                     width: '100%',
                     transform: `translateY(${item.start}px)`,
                   }}
-                  className={cn('flex gap-2', 'whitespace-pre-wrap break-all', LINE_TONES[line.level])}
+                  className={cn(
+                    'flex gap-2',
+                    'whitespace-pre-wrap break-all',
+                    line.stream === 'rcon' && 'text-[var(--primary)]',
+                    LINE_TONES[line.level],
+                  )}
                 >
-                  {time && <span className="shrink-0 text-[#6d8474]">{time}</span>}
+                  {time && <span className="shrink-0 opacity-60">{time}</span>}
                   <span>{line.text}</span>
                 </div>
               );

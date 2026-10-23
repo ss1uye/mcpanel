@@ -8,19 +8,16 @@ const children = [
   spawn('npm', ['run', 'dev', '-w', '@mcpanel/web'], { stdio: 'inherit', shell, env: devEnv }),
 ];
 
-const stop = () => {
+const stop = (code = 0) => {
   for (const child of children) child.kill();
-  process.exit(0);
+  process.exit(code);
 };
 
-process.on('SIGINT', stop);
-process.on('SIGTERM', stop);
+process.on('SIGINT', () => stop(0));
+process.on('SIGTERM', () => stop(0));
 
 for (const child of children) {
   child.on('exit', (code) => {
-    if (code !== 0 && code !== null) {
-      process.exitCode = code;
-      stop();
-    }
+    if (code) stop(code);
   });
 }

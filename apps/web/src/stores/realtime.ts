@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { create } from 'zustand';
+import { toast } from '../components/ui';
 import type {
   ConsoleLine,
   InstanceStatusSnapshot,
@@ -20,6 +21,7 @@ export interface ConsoleState {
 
 export interface RealtimeState {
   connection: 'closed' | 'connecting' | 'open';
+  subscribed: boolean;
   console: Record<string, ConsoleState>;
   states: Record<string, InstanceStatusSnapshot>;
   systemMetrics: SystemMetricsSample[];
@@ -31,6 +33,7 @@ export const EMPTY_METRICS: ProcessMetricsSample[] = [];
 
 export const emptyRealtime: RealtimeState = {
   connection: 'closed',
+  subscribed: false,
   console: {},
   states: {},
   systemMetrics: [],
@@ -123,7 +126,12 @@ interface RealtimeStore extends RealtimeState {
 
 export const useRealtime = create<RealtimeStore>((set) => ({
   ...emptyRealtime,
-  apply: (message) => set((state) => reduceRealtime(state, message)),
+  apply: (message) => {
+    if (message.type === 'notification') {
+      toast(message.message, message.level === 'error' ? 'error' : message.level === 'warning' ? 'info' : 'info');
+    }
+    set((state) => reduceRealtime(state, message));
+  },
   setConnection: (connection) => set({ connection }),
 }));
 
@@ -149,9 +157,10 @@ function ensureSocket(): void {
   intentionallyClosed = false;
   useRealtime.getState().setConnection('connecting');
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  socket = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
+  const current = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
+  socket = current;
 
-  socket.addEventListener('open', () => {
+  current.addEventListener('open', () => {
     attempts = 0;
     useRealtime.getState().setConnection('open');
     for (const channel of references.keys()) {
@@ -160,7 +169,7 @@ function ensureSocket(): void {
     pingTimer = window.setInterval(() => post({ type: 'ping' }), PING_INTERVAL_MS);
   });
 
-  socket.addEventListener('message', (event) => {
+  current.addEventListener('message', (event) => {
     try {
       useRealtime.getState().apply(JSON.parse(String(event.data)) as ServerWsMessage);
     } catch {
@@ -168,7 +177,9 @@ function ensureSocket(): void {
     }
   });
 
-  socket.addEventListener('close', () => {
+  current.addEventListener('close', () => {
+    // A late close from a superseded socket must not tear down the replacement connection.
+    if (socket !== current) return;
     useRealtime.getState().setConnection('closed');
     if (pingTimer !== null) window.clearInterval(pingTimer);
     pingTimer = null;
@@ -176,8 +187,8 @@ function ensureSocket(): void {
     if (!intentionallyClosed && references.size > 0) scheduleReconnect();
   });
 
-  socket.addEventListener('error', () => {
-    socket?.close();
+  current.addEventListener('error', () => {
+    current.close();
   });
 }
 
@@ -191,9 +202,14 @@ function scheduleReconnect(): void {
   }, delay);
 }
 
+function syncSubscribed(): void {
+  useRealtime.setState({ subscribed: references.size > 0 });
+}
+
 export function subscribeChannel(channel: string): void {
   const next = (references.get(channel) ?? 0) + 1;
   references.set(channel, next);
+  syncSubscribed();
   if (next === 1) {
     ensureSocket();
     post({ type: 'subscribe', channel, sinceSeq: lastSeqFor(channel) });
@@ -208,6 +224,7 @@ export function unsubscribeChannel(channel: string): void {
   } else {
     references.set(channel, next);
   }
+  syncSubscribed();
 }
 
 export function disconnectRealtime(): void {
@@ -219,7 +236,8 @@ export function disconnectRealtime(): void {
   pingTimer = null;
   socket?.close();
   socket = null;
-  useRealtime.getState().setConnection('closed');
+  // Logged-out operators must not see the previous session's console lines until fresh snapshots arrive.
+  useRealtime.setState({ ...emptyRealtime, connection: 'closed' });
 }
 
 export function useConnectionState(): RealtimeState['connection'] {

@@ -27,8 +27,13 @@ export class RconService {
   async statusFor(instance: InstanceRow): Promise<RconStatus> {
     const cached = this.statuses.get(instance.id);
     if (cached) return cached;
-    const resolution = await this.resolveTarget(instance);
-    return resolution.kind === 'disabled' ? 'disabled' : 'unreachable';
+    try {
+      const resolution = await this.resolveTarget(instance);
+      return resolution.kind === 'disabled' ? 'disabled' : 'unreachable';
+    } catch {
+      // An unreadable properties file must not take down the instance list for every other instance.
+      return 'unreachable';
+    }
   }
 
   async resolveTarget(instance: InstanceRow): Promise<TargetResolution> {

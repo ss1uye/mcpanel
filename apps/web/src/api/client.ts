@@ -52,7 +52,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as ApiErrorBody | null;
-    const code = data?.error.code ?? 'INTERNAL';
+    const code = data?.error?.code ?? 'INTERNAL';
     if (response.status === 403 && code === 'CSRF_INVALID' && options.retryCsrf !== false) {
       clearCsrfToken();
       return apiRequest<T>(path, { ...options, retryCsrf: false });
@@ -61,11 +61,36 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       clearCsrfToken();
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     }
-    throw new ApiError(code, data?.error.message ?? `请求失败（HTTP ${response.status}）`, response.status, data?.error.details);
+    throw new ApiError(code, data?.error?.message ?? `请求失败（HTTP ${response.status}）`, response.status, data?.error?.details);
   }
 
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+/** Downloads through a blob URL so an expired session cannot replace the SPA with a JSON page. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const response = await fetch(`/api${path}`, { credentials: 'same-origin' });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorBody | null;
+    if (response.status === 401) {
+      clearCsrfToken();
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    }
+    throw new ApiError(
+      data?.error?.code ?? 'INTERNAL',
+      data?.error?.message ?? `下载失败（HTTP ${response.status}）`,
+      response.status,
+    );
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export const api = {
