@@ -32,6 +32,19 @@ export interface ScheduleServiceDeps {
 
 const MAX_RUNS_PER_SCHEDULE = 100;
 
+export function nextRunsFor(cron: string, timezone: string, count = 3): string[] {
+  try {
+    const job = new Cron(cron, { timezone, paused: true });
+    try {
+      return job.nextRuns(count).map((date) => date.toISOString());
+    } finally {
+      job.stop();
+    }
+  } catch {
+    return [];
+  }
+}
+
 function toInfo(row: typeof schedules.$inferSelect): ScheduleInfo {
   const payload = JSON.parse(row.payloadJson) as { command?: string; message?: string };
   return {
@@ -46,6 +59,7 @@ function toInfo(row: typeof schedules.$inferSelect): ScheduleInfo {
     enabled: row.enabled,
     lastRunAt: row.lastRunAt === null ? null : new Date(row.lastRunAt).toISOString(),
     nextRunAt: row.nextRunAt === null ? null : new Date(row.nextRunAt).toISOString(),
+    nextRuns: nextRunsFor(row.cron, row.timezone),
     createdAt: new Date(row.createdAt).toISOString(),
   };
 }
@@ -88,15 +102,6 @@ export class ScheduleService {
       .limit(MAX_RUNS_PER_SCHEDULE)
       .all()
       .map(toRunInfo);
-  }
-
-  nextRuns(schedule: ScheduleInfo): string[] {
-    const job = new Cron(schedule.cron, { timezone: schedule.timezone, paused: true });
-    try {
-      return job.nextRuns(3).map((date) => date.toISOString());
-    } finally {
-      job.stop();
-    }
   }
 
   create(row: InstanceRow, input: ScheduleInput): ScheduleInfo {

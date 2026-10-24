@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuditService } from '../../src/services/audit-service';
 import { silentLogger } from '../../src/logger';
-import { ScheduleService } from '../../src/services/schedule-service';
+import { ScheduleService, nextRunsFor } from '../../src/services/schedule-service';
 import { createTestDb, type TestDb } from '../helpers/db';
 import { insertInstanceRow } from '../helpers/factory';
 
@@ -72,8 +72,10 @@ afterEach(async () => {
 describe('ScheduleService', () => {
   it('computes the next runs and stores nextRunAt', async () => {
     const { service, instance, schedule } = await setup();
-    expect(service.list(instance)[0]!.nextRunAt).not.toBeNull();
-    expect(service.nextRuns(schedule)).toHaveLength(3);
+    const listed = service.list(instance)[0]!;
+    expect(listed.nextRunAt).not.toBeNull();
+    expect(listed.nextRuns).toHaveLength(3);
+    expect(nextRunsFor(schedule.cron, schedule.timezone)).toHaveLength(3);
   });
 
   it('rejects invalid cron expressions', async () => {

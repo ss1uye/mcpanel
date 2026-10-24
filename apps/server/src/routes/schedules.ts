@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { createScheduleSchema, updateScheduleSchema } from '@mcpanel/shared';
+import { createScheduleSchema, schedulePreviewSchema, updateScheduleSchema } from '@mcpanel/shared';
 import { createGuards } from '../auth/guard';
 import type { SessionService } from '../auth/session';
 import type { AuditService } from '../services/audit-service';
 import type { InstanceService } from '../services/instance-service';
-import type { ScheduleService } from '../services/schedule-service';
+import { nextRunsFor, type ScheduleService } from '../services/schedule-service';
 import type { SettingsService } from '../services/settings-service';
 import { AppError } from '../utils/errors';
 
@@ -25,6 +25,19 @@ export function registerScheduleRoutes(app: FastifyInstance, deps: ScheduleRoute
   app.get<{ Params: { id: string } }>('/api/instances/:id/schedules', read, async (request) => ({
     items: schedules.list(instances.get(request.params.id)),
   }));
+
+  app.get<{ Params: { id: string } }>('/api/instances/:id/schedules/preview', read, async (request) => {
+    instances.get(request.params.id);
+    let query: { cron: string; timezone: string };
+    try {
+      query = schedulePreviewSchema.parse(request.query);
+    } catch {
+      throw new AppError('INVALID_CRON', 'cron 表达式或时区无效');
+    }
+    const nextRuns = nextRunsFor(query.cron, query.timezone);
+    if (nextRuns.length === 0) throw new AppError('INVALID_CRON', 'cron 表达式或时区无效');
+    return { nextRuns };
+  });
 
   app.post<{ Params: { id: string } }>('/api/instances/:id/schedules', write, async (request, reply) => {
     const row = instances.get(request.params.id);

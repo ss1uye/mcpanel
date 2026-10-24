@@ -106,6 +106,41 @@ describe('schedules API', () => {
     expect(json<{ error: { code: string } }>(res).error.code).toBe('INVALID_CRON');
   });
 
+  it('returns next runs and previews a cron for the form', async () => {
+    const { app, instanceId, headers, readHeaders } = await makeApp();
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/instances/${instanceId}/schedules`,
+      headers,
+      payload: { name: '每日备份', cron: '0 4 * * *', actionType: 'backup' },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(json<{ nextRuns: string[] }>(created).nextRuns).toHaveLength(3);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: `/api/instances/${instanceId}/schedules`,
+      headers: readHeaders,
+    });
+    expect(json<{ items: Array<{ nextRuns: string[] }> }>(list).items[0]!.nextRuns).toHaveLength(3);
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: `/api/instances/${instanceId}/schedules/preview?cron=${encodeURIComponent('*/5 * * * *')}&timezone=${encodeURIComponent('Asia/Shanghai')}`,
+      headers: readHeaders,
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(json<{ nextRuns: string[] }>(preview).nextRuns).toHaveLength(3);
+
+    const bad = await app.inject({
+      method: 'GET',
+      url: `/api/instances/${instanceId}/schedules/preview?cron=every-day&timezone=Asia%2FShanghai`,
+      headers: readHeaders,
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(json<{ error: { code: string } }>(bad).error.code).toBe('INVALID_CRON');
+  });
+
   it('runs a schedule manually and returns the run record', async () => {
     const { app, instanceId, headers, sendCommand } = await makeApp();
     const created = await app.inject({
