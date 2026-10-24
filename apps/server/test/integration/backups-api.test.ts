@@ -2,7 +2,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { buildApp } from '../../src/app';
+import { backups } from '../../src/db/schema';
 import { LoginThrottle } from '../../src/auth/guard';
 import { SessionService } from '../../src/auth/session';
 import { loadConfig } from '../../src/config';
@@ -86,6 +88,7 @@ async function makeApp() {
   jar.set('mcpanel_session', token);
   return {
     app,
+    dataDir,
     root,
     instanceId,
     headers: { origin: TEST_ORIGIN, cookie: jar.header(), 'x-csrf-token': json<{ token: string }>(csrf).token },
@@ -100,7 +103,9 @@ async function waitReady(
 ) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const list = await app.inject({ method: 'GET', url: `/api/instances/${instanceId}/backups`, headers });
-    const items = json<{ items: Array<{ id: string; status: string; error: string | null }> }>(list).items;
+    const items = json<{
+      items: Array<{ id: string; status: string; error: string | null; filename: string }>;
+    }>(list).items;
     const ready = items.find((item) => item.status === 'ready');
     if (ready) return ready;
     const failed = items.find((item) => item.status === 'failed');
@@ -143,6 +148,7 @@ describe('backups API', () => {
     });
     expect(download.statusCode).toBe(200);
     expect(download.headers['content-type']).toContain('application/zip');
+    expect(String(download.headers['content-disposition'])).toContain(ready.filename);
 
     const deleted = await app.inject({
       method: 'DELETE',
@@ -152,6 +158,31 @@ describe('backups API', () => {
     expect(deleted.statusCode).toBe(204);
     const list = await app.inject({ method: 'GET', url: `/api/instances/${instanceId}/backups`, headers: readHeaders });
     expect(json<{ items: unknown[] }>(list).items).toHaveLength(0);
+  });
+
+  it('rejects downloads for backups that are not ready or whose file is missing', async () => {
+    const { app, dataDir, instanceId, headers, readHeaders } = await makeApp();
+    await app.inject({ method: 'POST', url: `/api/instances/${instanceId}/backups`, headers, payload: {} });
+    const ready = await waitReady(app, instanceId, readHeaders);
+
+    ctx!.db.update(backups).set({ status: 'failed' }).where(eq(backups.id, ready.id)).run();
+    const notReady = await app.inject({
+      method: 'GET',
+      url: `/api/instances/${instanceId}/backups/${ready.id}/download`,
+      headers: readHeaders,
+    });
+    expect(notReady.statusCode).toBe(409);
+    expect(json<{ error: { code: string } }>(notReady).error.code).toBe('INVALID_STATE');
+
+    ctx!.db.update(backups).set({ status: 'ready' }).where(eq(backups.id, ready.id)).run();
+    await fs.rm(path.join(dataDir, 'backups', instanceId, ready.filename));
+    const missing = await app.inject({
+      method: 'GET',
+      url: `/api/instances/${instanceId}/backups/${ready.id}/download`,
+      headers: readHeaders,
+    });
+    expect(missing.statusCode).toBe(404);
+    expect(json<{ error: { code: string } }>(missing).error.code).toBe('NOT_FOUND');
   });
 
   it('restores a backup over modified files', async () => {

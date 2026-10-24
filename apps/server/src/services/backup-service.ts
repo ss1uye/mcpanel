@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { statSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { PANEL_VERSION, type BackupInfo, type BackupKind, type BackupManifest, type TaskInfo } from '@mcpanel/shared';
@@ -86,14 +87,21 @@ export class BackupService {
     }
   }
 
-  filePath(instanceId: string, backupId: string): string {
+  downloadable(instanceId: string, backupId: string): { path: string; filename: string } {
     const row = this.deps.db
       .select()
       .from(backups)
       .where(and(eq(backups.id, backupId), eq(backups.instanceId, instanceId)))
       .get();
     if (!row) throw new AppError('NOT_FOUND', '备份不存在');
-    return path.join(this.deps.dataDir, 'backups', instanceId, row.filename);
+    if (row.status !== 'ready') throw new AppError('INVALID_STATE', '备份尚不可下载');
+    const file = path.join(this.deps.dataDir, 'backups', instanceId, row.filename);
+    try {
+      statSync(file);
+    } catch {
+      throw new AppError('NOT_FOUND', '备份文件不存在');
+    }
+    return { path: file, filename: row.filename };
   }
 
   /** Synchronous gate the routes can turn into 409 before a task is created. */
