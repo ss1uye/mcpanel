@@ -5,7 +5,14 @@ import { BrowserRouter } from 'react-router-dom';
 import { ApiError, clearCsrfToken, UNAUTHORIZED_EVENT } from './api/client';
 import { AppRouter } from './router';
 import { disconnectRealtime } from './stores/realtime';
+import { readCspNonce } from './utils/csp';
 import './styles/index.css';
+
+// react-style-singleton（Radix 弹层依赖）通过该全局变量给动态 <style> 打 nonce。
+const cspNonce = readCspNonce();
+if (cspNonce && cspNonce !== '__CSP_NONCE__') {
+  (window as typeof window & { __webpack_nonce__?: string }).__webpack_nonce__ = cspNonce;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
