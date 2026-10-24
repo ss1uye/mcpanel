@@ -84,7 +84,14 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - **配置**：`NODE_ENV` 默认 production（非法值报错）；`PANEL_HOST/PORT`、`DATA_DIR`、`COOKIE_SECURE`、`TRUST_PROXY`、`LOG_LEVEL`、`MAX_UPLOAD_MB`；仓库根 `.env` 由 `import.meta.url` 定位。
 - **提交约定**：小步提交；每次 `typecheck + test + lint` 全绿；不提交 `data/`、`data-e2e/`；文档不写凭据。
 
-## 7. 已验证的能力
+## 7. 仓库配套
+
+- 许可证：MIT（`LICENSE`）。
+- CI：`.github/workflows/ci.yml`，`main` push 与 PR 在 **ubuntu-latest + windows-latest** 上执行
+  `npm ci` → `typecheck` → `test` → `lint` → `build`（CI 使用 npm 11.19.1）。Playwright 未纳入 CI。
+- 仓库描述与 topics 需在 GitHub 网页设置（API 写入需要 token，本项目只用 SSH）。
+
+## 8. 已验证的能力
 
 - 生命周期：纳管 → 探测（启动脚本/Java/properties/EULA/RCON）→ 启动/停止/重启/强杀 → 孤儿恢复。
 - 控制台：实时流、环形缓冲 5000 行、日志尾部回放、级别/搜索过滤、下载、命令历史。
@@ -95,7 +102,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - 计划：CRUD、立即运行、运行记录、时区。
 - 运维：审计页、面板设置与改密码、`start-panel.bat`、systemd 文档、`reset-password.mjs`、Playwright 冒烟。
 
-## 8. 已知限制（可接受，未阻塞第一版）
+## 9. 已知限制（可接受，未阻塞第一版）
 
 1. 备份 manifest 只做结构/路径校验，未与数据库存证做哈希比对；面板生成的备份可信，手工替换 zip 仍会被路径校验拦截。
 2. 运行中备份与「面板之外的进程终止」存在窄竞态；面板内的启停已被实例锁串行化。
@@ -108,7 +115,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 9. CSP 仍为 `connect-src 'self' ws: wss:`、`style-src` 含 `'unsafe-inline'`，可按部署收紧。
 10. `data/` 只存在于本机；`data-e2e/`、`test-results/` 等已 gitignore。
 
-## 9. 建议的下一步
+## 10. 建议的下一步
 
 1. ~~添加 remote 并推送~~ 已完成：`origin` 指向私有仓库 `git@github.com:ss1uye/mcpanel.git`，`main` 已推送并跟踪。后续改动直接 `git push`。
 2. 纳管一个真实测试服，跑一遍手工验收矩阵（规格 §21.4），重点：Windows 中文/空格路径、面板重启时的孤儿检测、运行中严格备份、恢复。

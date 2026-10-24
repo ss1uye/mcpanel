@@ -1,5 +1,7 @@
 # MC Panel
 
+[![CI](https://github.com/ss1uye/mcpanel/actions/workflows/ci.yml/badge.svg)](https://github.com/ss1uye/mcpanel/actions/workflows/ci.yml)
+
 自托管的 Minecraft Java 模组服管理面板。第一版面向单管理员、单机节点，纳管已经安装好的 Fabric / Forge / NeoForge 服务器目录，不接管安装流程。
 
 ## 当前阶段（第一版完成）
@@ -140,3 +142,7 @@ node scripts/reset-password.mjs [用户名]   # 默认 admin，按提示输入�
 ```
 
 脚本会重写密码哈希并清空所有会话，实例与备份数据不受影响。
+
+## 许可证
+
+[MIT](LICENSE)
