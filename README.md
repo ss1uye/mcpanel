@@ -2,7 +2,7 @@
 
 自托管的 Minecraft Java 模组服管理面板。第一版面向单管理员、单机节点，纳管已经安装好的 Fabric / Forge / NeoForge 服务器目录，不接管安装流程。
 
-## 当前阶段（阶段 1–2）
+## 当前阶段（第一版完成）
 
 - 首次初始化、登录、会话与 CSRF 防护
 - 纳管已有服务器目录（自动探测启动脚本、Java、server.properties、EULA、RCON 端口）
@@ -14,9 +14,13 @@
 - 文件管理：浏览、上传（流式、大小限制）、下载、文本编辑（修改时间冲突提示）、新建 / 重命名 / 删除、zip 解压（zip-slip 校验）、`mods/` 启用与禁用
 - 配置：`server.properties` 分组表单与原始编辑（保留注释、顺序与换行），EULA 接受
 - 审计页（动作前缀过滤、详情展开）与面板设置（名称、时区、保留天数、修改密码）
+- 备份：严格一致性（`save-off` / `save-all flush` / 等待落盘 / `save-on`）、保留策略、下载与删除
+- 恢复：`pre_restore` 安全备份、安全解压、目录交换与失败回滚、中断残留清理
+- 定时任务：备份 / 启停 / 重启 / 命令 / 广播，cron + 时区、重叠跳过、运行记录
+- 部署：Windows `scripts/start-panel.bat`、Linux systemd（`docs/systemd.md`）、`scripts/reset-password.mjs`
 - 路径沙箱、审计日志与玩家动作固定命令模板
 
-备份、计划任务、Windows 一键启动在阶段 3。
+第一版即阶段 1–3 的全部范围；玩家、文件、配置、备份与计划均在同一个面板内闭环。
 
 ## 环境要求
 
@@ -48,6 +52,9 @@ npm start
 
 访问 `http://127.0.0.1:3000`，首次打开进入初始化页面。生产构建由 Fastify 托管 `apps/web/dist`，
 刷新任意前端路由不会 404；未设置 `NODE_ENV` 时按 `production` 运行。
+
+Windows 可直接双击 `scripts/start-panel.bat`：它会检查 Node.js 版本、按需安装依赖与构建、
+启动面板并打开浏览器。Linux 常驻见 `docs/systemd.md`。
 
 ## 配置项
 
@@ -93,16 +100,43 @@ data/
 - 直接关闭面板不会停止 Minecraft 服务器；服务器在面板重启后会被识别为 `orphaned` 或 `unknown` 并给出处理入口。
 - 需要 HTTPS 请放在反向代理之后，并设置 `COOKIE_SECURE=true`。
 
+## 备份与恢复
+
+- 备份包含存档目录（`level-name` 及其 nether/end）、`server.properties`、`eula.txt`、名单文件，
+  可选 `config/`、`defaultconfigs/`、`mods/`，以及最多 20 个额外路径；`logs/`、`cache/`、
+  `libraries/` 与面板临时目录始终排除。
+- 服务器运行中备份要求 RCON 可用：面板先关闭自动保存、刷盘并等待日志确认，再打包，结束后恢复保存。
+- 恢复需要先停止服务器；恢复前会自动创建一份 `恢复前` 备份，失败时回滚已移动的目录。
+- 保留策略按实例的「保留数量」，但最新一份 `恢复前` 备份始终保留。
+
+## 定时任务
+
+- 标准 5 段 cron，按计划独立时区（默认取面板设置）。
+- 支持备份、启动、停止、重启、发送命令、广播；面板离线期间错过的任务不会补跑。
+- 同一计划上一次尚未结束时会记录为「跳过」；运行记录保留最近 100 条。
+
 ## 测试
 
 ```bash
 npm run typecheck
 npm test
 npm run lint
+npm run test:e2e     # Playwright 冒烟（Chromium，需先 npx playwright install chromium）
 ```
+
+## 升级
+
+1. 停止面板（不会停止 Minecraft）；
+2. 备份 `data/panel.db` 与 `data/backups/`；
+3. 更新代码后执行 `npm ci && npm run build`；
+4. 重新启动，数据库迁移会自动执行。
 
 ## 忘记密码
 
-已登录时可在「设置 → 修改密码」中修改，修改后其他会话会被踢出。若已经无法登录，可停止面板后删除
-`data/panel.db` 中的 `users` 与 `sessions` 记录（会丢失实例注册信息，建议先备份 `panel.db`），再重新初始化。
-阶段 3 提供 `scripts/reset-password.mjs`。
+已登录时可在「设置 → 修改密码」中修改，修改后其他会话会被踢出。若已经无法登录，停止面板后执行：
+
+```bash
+node scripts/reset-password.mjs [用户名]   # 默认 admin，按提示输入两次新密码
+```
+
+脚本会重写密码哈希并清空所有会话，实例与备份数据不受影响。
