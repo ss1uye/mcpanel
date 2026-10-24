@@ -18,6 +18,7 @@ import { InstanceService } from './services/instance-service';
 import { InstanceSupervisor } from './services/instance-supervisor';
 import { MetricsService } from './services/metrics-service';
 import { ProbeService } from './services/probe-service';
+import { RconConfigService } from './services/rcon-config-service';
 import { RconService } from './services/rcon-service';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -42,6 +43,7 @@ const sandbox = new PathSandbox(config.dataDir);
 const files = new FileService(sandbox);
 const driver = new LocalNodeDriver(sandbox);
 const rcon = new RconService();
+const rconConfig = new RconConfigService(sandbox, instances, rcon);
 const probe = new ProbeService(sandbox);
 const supervisor = new InstanceSupervisor({ db: handle.db, driver, rcon, audit, logger, dataDir: config.dataDir });
 
@@ -55,7 +57,7 @@ if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
 const app = await buildApp(
   config,
   handle.db,
-  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox },
+  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig },
   { logger, serveStatic },
 );
 

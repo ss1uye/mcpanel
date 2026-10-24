@@ -19,6 +19,7 @@ import { registerAuthRoutes } from './routes/auth';
 import { registerConfigRoutes } from './routes/config';
 import { registerFileRoutes } from './routes/files';
 import { registerInstanceRoutes } from './routes/instances';
+import { registerRconRoutes } from './routes/rcon';
 import { registerSystemRoutes } from './routes/system';
 import type { LocalNodeDriver } from './nodes/local-driver';
 import type { PathSandbox } from './nodes/path-sandbox';
@@ -28,6 +29,7 @@ import type { InstanceService } from './services/instance-service';
 import type { InstanceSupervisor } from './services/instance-supervisor';
 import type { MetricsService } from './services/metrics-service';
 import type { ProbeService } from './services/probe-service';
+import type { RconConfigService } from './services/rcon-config-service';
 import type { RconService } from './services/rcon-service';
 import { AppError } from './utils/errors';
 import { WsHub } from './ws/hub';
@@ -44,6 +46,7 @@ export interface AppServices {
   metrics?: MetricsService;
   files?: FileService;
   sandbox?: PathSandbox;
+  rconConfig?: RconConfigService;
 }
 
 export interface BuildAppOptions {
@@ -196,6 +199,16 @@ export async function buildApp(
       instances: services.instances,
       rcon: services.rcon,
       sandbox: services.sandbox,
+    });
+  }
+
+  if (services.instances && services.rcon && services.rconConfig) {
+    registerRconRoutes(app, {
+      sessions: services.sessions,
+      audit: services.audit,
+      instances: services.instances,
+      rcon: services.rcon,
+      rconConfig: services.rconConfig,
     });
   }
 
