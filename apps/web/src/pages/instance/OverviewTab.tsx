@@ -44,7 +44,7 @@ export function OverviewTab() {
           value={latest ? `${latest.cpu.toFixed(1)}%` : '—'}
           detail={latest ? formatBytes(latest.memBytes) : '等待采样'}
         />
-        <Card label="RCON" value={RCON_LABELS[instance.rconStatus]} detail="玩家管理在阶段 2 提供" />
+        <Card label="RCON" value={RCON_LABELS[instance.rconStatus]} detail="玩家操作见「玩家」页签" />
         <Card label="日志编码" value={instance.logEncoding.toUpperCase()} detail={`停止超时 ${instance.stopTimeoutSec} 秒`} />
       </div>
 

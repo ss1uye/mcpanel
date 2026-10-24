@@ -46,7 +46,10 @@ export function FileEditorDialog({
     onSuccess: async (result) => {
       setMtime(result.mtime);
       setConflict(null);
-      await queryClient.invalidateQueries({ queryKey: ['files', instanceId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['files', instanceId] }),
+        queryClient.invalidateQueries({ queryKey: ['file-content', instanceId, path] }),
+      ]);
       toast('已保存', 'success');
     },
     onError: async (cause) => {
