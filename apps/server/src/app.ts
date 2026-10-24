@@ -19,6 +19,7 @@ import { registerAuthRoutes } from './routes/auth';
 import { registerConfigRoutes } from './routes/config';
 import { registerFileRoutes } from './routes/files';
 import { registerInstanceRoutes } from './routes/instances';
+import { registerPlayerRoutes } from './routes/players';
 import { registerRconRoutes } from './routes/rcon';
 import { registerSystemRoutes } from './routes/system';
 import type { LocalNodeDriver } from './nodes/local-driver';
@@ -27,6 +28,7 @@ import type { AuditService } from './services/audit-service';
 import type { FileService } from './services/file-service';
 import type { InstanceService } from './services/instance-service';
 import type { InstanceSupervisor } from './services/instance-supervisor';
+import type { PlayersService } from './services/players-service';
 import type { MetricsService } from './services/metrics-service';
 import type { ProbeService } from './services/probe-service';
 import type { RconConfigService } from './services/rcon-config-service';
@@ -47,6 +49,7 @@ export interface AppServices {
   files?: FileService;
   sandbox?: PathSandbox;
   rconConfig?: RconConfigService;
+  players?: PlayersService;
 }
 
 export interface BuildAppOptions {
@@ -209,6 +212,15 @@ export async function buildApp(
       instances: services.instances,
       rcon: services.rcon,
       rconConfig: services.rconConfig,
+    });
+  }
+
+  if (services.instances && services.players) {
+    registerPlayerRoutes(app, {
+      sessions: services.sessions,
+      audit: services.audit,
+      instances: services.instances,
+      players: services.players,
     });
   }
 
