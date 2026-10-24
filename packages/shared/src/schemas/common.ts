@@ -10,5 +10,10 @@ export const logsQuerySchema = z.object({
 });
 
 export const auditQuerySchema = paginationSchema.extend({
-  action: z.string().trim().max(80).optional(),
+  action: z
+    .string()
+    .trim()
+    .max(80)
+    .regex(/^[A-Za-z0-9._-]+$/, '动作过滤只支持字母、数字、点、下划线和连字符')
+    .optional(),
 });

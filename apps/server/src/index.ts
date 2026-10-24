@@ -21,6 +21,7 @@ import { PlayersService } from './services/players-service';
 import { ProbeService } from './services/probe-service';
 import { RconConfigService } from './services/rcon-config-service';
 import { RconService } from './services/rcon-service';
+import { SettingsService } from './services/settings-service';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -52,6 +53,7 @@ await supervisor.init();
 
 const metrics = new MetricsService({ supervisor, db: handle.db, dataDir: config.dataDir });
 const players = new PlayersService(sandbox, rcon, (instanceId) => supervisor.getStatus(instanceId).state);
+const settings = new SettingsService(handle.db);
 const serveStatic = config.nodeEnv === 'production';
 if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
   logger.warn({ webDistDir: config.webDistDir }, '未找到前端构建产物，请先运行 npm run build 后再启动面板');
@@ -59,7 +61,7 @@ if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
 const app = await buildApp(
   config,
   handle.db,
-  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig, players },
+  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig, players, settings },
   { logger, serveStatic },
 );
 

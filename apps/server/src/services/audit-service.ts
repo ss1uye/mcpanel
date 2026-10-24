@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { count, desc, eq } from 'drizzle-orm';
+import { count, desc, like } from 'drizzle-orm';
 import type { AuditEntry, Paginated } from '@mcpanel/shared';
 import type { Logger } from 'pino';
 import type { DB } from '../db/client';
@@ -96,7 +96,7 @@ export class AuditService {
   list(query: { page: number; pageSize: number; action?: string }): Paginated<AuditEntry> {
     const page = clampInteger(query.page, 1, Number.MAX_SAFE_INTEGER);
     const pageSize = clampInteger(query.pageSize, 1, 100);
-    const where = query.action ? eq(auditLogs.action, query.action) : undefined;
+    const where = query.action ? like(auditLogs.action, `${query.action}%`) : undefined;
     const total = this.db.select({ value: count() }).from(auditLogs).where(where).get()?.value ?? 0;
     const rows = this.db
       .select()
