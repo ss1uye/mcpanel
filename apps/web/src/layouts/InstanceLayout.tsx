@@ -32,6 +32,8 @@ const tabs = [
   { to: 'players', label: '玩家' },
   { to: 'files', label: '文件' },
   { to: 'config', label: '配置' },
+  { to: 'backups', label: '备份' },
+  { to: 'schedules', label: '计划' },
   { to: 'settings', label: '设置' },
 ];
 

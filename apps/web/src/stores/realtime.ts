@@ -7,6 +7,7 @@ import type {
   ProcessMetricsSample,
   ServerWsMessage,
   SystemMetricsSample,
+  TaskInfo,
 } from '@mcpanel/shared';
 
 const MAX_LINES = 5000;
@@ -26,6 +27,7 @@ export interface RealtimeState {
   states: Record<string, InstanceStatusSnapshot>;
   systemMetrics: SystemMetricsSample[];
   instanceMetrics: Record<string, ProcessMetricsSample[]>;
+  tasks: Record<string, TaskInfo>;
 }
 
 export const EMPTY_CONSOLE: ConsoleState = { lines: [], lastSeq: 0, gap: false };
@@ -38,6 +40,7 @@ export const emptyRealtime: RealtimeState = {
   states: {},
   systemMetrics: [],
   instanceMetrics: {},
+  tasks: {},
 };
 
 function channelInstance(channel: string): string | undefined {
@@ -114,6 +117,8 @@ export function reduceRealtime(state: RealtimeState, message: ServerWsMessage): 
           [message.instanceId]: [...(state.instanceMetrics[message.instanceId] ?? []), message.sample].slice(-MAX_SAMPLES),
         },
       };
+    case 'task.update':
+      return { ...state, tasks: { ...state.tasks, [message.task.id]: message.task } };
     default:
       return state;
   }
@@ -281,4 +286,15 @@ export function useSystemMetrics(): SystemMetricsSample[] {
     return () => unsubscribeChannel('system:metrics');
   }, []);
   return samples;
+}
+
+export function useTask(taskId: string | null): TaskInfo | undefined {
+  const task = useRealtime((state) => (taskId ? state.tasks[taskId] : undefined));
+  useEffect(() => {
+    if (!taskId) return;
+    const channel = `task:${taskId}`;
+    subscribeChannel(channel);
+    return () => unsubscribeChannel(channel);
+  }, [taskId]);
+  return task;
 }
