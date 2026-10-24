@@ -1,7 +1,8 @@
+import fs from 'node:fs';
 import net from 'node:net';
 
 // Minimal Source RCON (SERVERDATA_AUTH / SERVERDATA_EXECCOMMAND) server for tests.
-export function startFakeRcon({ password = 'secret', port = 0, saveAllDelayMs = 0 } = {}) {
+export function startFakeRcon({ password = 'secret', port = 0, saveAllDelayMs = 0, logFile = null } = {}) {
   return new Promise((resolve) => {
     const connections = new Set();
     const server = net.createServer((socket) => {
@@ -29,7 +30,7 @@ export function startFakeRcon({ password = 'secret', port = 0, saveAllDelayMs = 
               socket.destroy();
               continue;
             }
-            const reply = respond(body, saveAllDelayMs);
+            const reply = respond(body, saveAllDelayMs, logFile);
             if (reply === null) continue;
             send(socket, id, 0, reply);
             if (body === 'stop') setTimeout(() => socket.destroy(), 20);
@@ -51,11 +52,22 @@ export function startFakeRcon({ password = 'secret', port = 0, saveAllDelayMs = 
   });
 }
 
-function respond(command, saveAllDelayMs) {
+function respond(command, saveAllDelayMs, logFile) {
   if (command === 'list') return 'There are 0 of a max of 20 players online:';
   if (command === 'save-off') return 'Warning, saving is already disabled!';
   if (command === 'save-on') return 'Warning, saving is already enabled!';
   if (command.startsWith('save-all')) {
+    if (logFile) {
+      // Mirrors a real server: the flushed save is confirmed in latest.log.
+      setTimeout(() => {
+        try {
+          fs.appendFileSync(logFile, '[Server thread/INFO]: Saved the game\n');
+        } catch {
+          // The test controls the log file; ignore transient failures.
+        }
+      }, saveAllDelayMs);
+      return 'Saved the game';
+    }
     // A positive delay models a server that never answers, so callers must time out.
     if (saveAllDelayMs > 0) return null;
     return 'Saved the game';
