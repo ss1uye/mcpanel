@@ -204,10 +204,19 @@ export interface PanelSettings {
 `packages/shared/src/schemas/files.ts`：
 
 ```ts
-import path from 'node:path';
 import { z } from 'zod';
 
 const NUL = '\0';
+
+// `packages/shared` is bundled for the browser, so no node:path here.
+function hasUnsafeSegments(value: string): boolean {
+  const replaced = value.replaceAll('\\', '/');
+  if (/^[A-Za-z]:/.test(replaced)) return true;
+  for (const segment of replaced.split('/')) {
+    if (segment === '..') return true;
+  }
+  return false;
+}
 
 export const filePathSchema = z
   .string()
@@ -215,10 +224,7 @@ export const filePathSchema = z
   .optional()
   .transform((value) => value ?? '/')
   .refine((value) => !value.includes(NUL), '路径非法')
-  .refine((value) => {
-    const normalized = path.posix.normalize(value.replaceAll('\\', '/'));
-    return normalized === '/' || (!normalized.startsWith('../') && !normalized.startsWith('/../'));
-  }, '路径越界');
+  .refine((value) => !hasUnsafeSegments(value), '路径越界');
 
 export const saveFileSchema = z.object({
   path: z.string().min(1).max(4096).refine((value) => !value.includes(NUL), '路径非法'),

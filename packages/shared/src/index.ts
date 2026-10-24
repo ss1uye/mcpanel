@@ -5,3 +5,6 @@ export * from './schemas/auth';
 export * from './schemas/instance';
 export * from './schemas/common';
 export * from './schemas/ws';
+export * from './schemas/files';
+export * from './schemas/players';
+export * from './schemas/settings';

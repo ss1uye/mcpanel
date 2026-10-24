@@ -8,6 +8,9 @@ import {
   markStoppedSchema,
   setupSchema,
 } from '../src/index';
+import { playerActionSchema } from '../src/schemas/players';
+import { filePathSchema, saveFileSchema, renameSchema } from '../src/schemas/files';
+import { panelSettingsSchema } from '../src/schemas/settings';
 
 describe('shared contracts', () => {
   it('rejects a password shorter than 12 characters', () => {
@@ -47,5 +50,45 @@ describe('shared contracts', () => {
     for (const code of API_ERROR_CODES) {
       expect(ERROR_HTTP_STATUS[code]).toBeGreaterThanOrEqual(400);
     }
+  });
+});
+
+describe('phase 2 schemas', () => {
+  it('accepts only whitelisted player actions with sanitized reasons', () => {
+    expect(playerActionSchema.parse({ action: 'kick', player: 'Steve', reason: '挂机\n刷屏' })).toEqual({
+      action: 'kick',
+      player: 'Steve',
+      reason: '挂机 刷屏',
+    });
+    expect(playerActionSchema.parse({ action: 'gamemode', player: 'Alex', mode: 'creative' })).toMatchObject({
+      mode: 'creative',
+    });
+    expect(() => playerActionSchema.parse({ action: 'op', player: 'bad name' })).toThrow();
+    expect(() => playerActionSchema.parse({ action: 'say_all', message: 'x' })).toThrow();
+    expect(playerActionSchema.parse({ action: 'broadcast', message: '维护 5 分钟' })).toEqual({
+      action: 'broadcast',
+      message: '维护 5 分钟',
+    });
+  });
+
+  it('defaults file paths to the instance root and rejects traversal', () => {
+    expect(filePathSchema.parse(undefined)).toBe('/');
+    expect(filePathSchema.parse('/mods')).toBe('/mods');
+    expect(() => filePathSchema.parse('../etc')).toThrow();
+    expect(() => filePathSchema.parse('a/../../b')).toThrow();
+    expect(() => filePathSchema.parse('/a\0b')).toThrow();
+    expect(saveFileSchema.parse({ path: '/ops.json', content: '[]', expectedMtime: 1 })).toMatchObject({
+      expectedMtime: 1,
+    });
+    expect(() => renameSchema.parse({ path: '/a.txt', newName: '../b.txt' })).toThrow();
+    expect(() => renameSchema.parse({ path: '/a.txt', newName: 'b/c.txt' })).toThrow();
+  });
+
+  it('validates panel settings', () => {
+    expect(
+      panelSettingsSchema.parse({ panelName: '我的面板', defaultTimezone: 'Asia/Shanghai', auditRetentionDays: 30 }),
+    ).toMatchObject({ auditRetentionDays: 30 });
+    expect(() => panelSettingsSchema.partial().parse({ defaultTimezone: 'Not/AZone' })).toThrow();
+    expect(() => panelSettingsSchema.partial().parse({ auditRetentionDays: 0 })).toThrow();
   });
 });

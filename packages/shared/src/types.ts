@@ -158,3 +158,58 @@ export type ServerWsMessage =
   | { type: 'notification'; level: 'info' | 'warning' | 'error'; message: string }
   | { type: 'pong' }
   | { type: 'error'; code: string; message: string };
+
+export interface FileEntryInfo {
+  name: string;
+  type: 'file' | 'directory';
+  size: number;
+  mtime: string;
+  symlink: boolean;
+  editable: boolean;
+}
+
+export interface FileListResult {
+  path: string;
+  entries: FileEntryInfo[];
+}
+
+export interface TextFileContent {
+  content: string;
+  mtime: number;
+  eol: '\r\n' | '\n';
+}
+
+export interface PlayersResponse {
+  online: string[];
+  max: number;
+  warning: string | null;
+  rconStatus: RconStatus;
+  state: InstanceState;
+}
+
+export interface PlayerListsResponse {
+  whitelist: string[];
+  ops: string[];
+  banned: string[];
+  bannedIps: string[];
+}
+
+export interface PropertiesPayload {
+  entries: Array<{ key: string; value: string; line: number }>;
+  duplicates: string[];
+  raw: string;
+  eol: '\r\n' | '\n';
+  mtime: number;
+  eula: boolean;
+}
+
+export interface RconEnableResult {
+  port: number;
+  password: string;
+}
+
+export interface PanelSettings {
+  panelName: string;
+  defaultTimezone: string;
+  auditRetentionDays: number;
+}
