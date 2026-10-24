@@ -18,10 +18,12 @@
     "start": "node apps/server/dist/index.js",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "node scripts/clean-e2e.mjs && playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^24.0.0",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
