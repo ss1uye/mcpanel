@@ -47,7 +47,10 @@ describe('SPA hosting', () => {
   it('serves the built shell for client routes and JSON 404 for API misses', async () => {
     db = createTestDb();
     webDist = fs.mkdtempSync(path.join(os.tmpdir(), 'mcpanel-web-'));
-    fs.writeFileSync(path.join(webDist, 'index.html'), '<!doctype html><title>MC Panel</title>');
+    fs.writeFileSync(
+      path.join(webDist, 'index.html'),
+      '<!doctype html><html><head><meta name="csp-nonce" content="__CSP_NONCE__" /></head><body><title>MC Panel</title></body></html>',
+    );
     fs.mkdirSync(path.join(webDist, 'assets'));
     fs.writeFileSync(path.join(webDist, 'assets', 'app.js'), 'export const loaded = true;');
 
@@ -73,6 +76,55 @@ describe('SPA hosting', () => {
     const api = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
     expect(api.statusCode).toBe(404);
     expect(api.json().error.code).toBe('NOT_FOUND');
+
+    await app.close();
+  });
+
+  it('serves a nonce-based CSP scoped to the request host', async () => {
+    db = createTestDb();
+    webDist = fs.mkdtempSync(path.join(os.tmpdir(), 'mcpanel-web-'));
+    fs.writeFileSync(
+      path.join(webDist, 'index.html'),
+      '<!doctype html><html><head><meta name="csp-nonce" content="__CSP_NONCE__" /></head><body><title>MC Panel</title></body></html>',
+    );
+    const config = { ...loadConfig({ NODE_ENV: 'test', DATA_DIR: db.dir }), webDistDir: webDist };
+    const app = await buildApp(
+      config,
+      db.db,
+      { sessions: new SessionService(db.db), audit: new AuditService(db.db), loginThrottle: new LoginThrottle() },
+      { logger: silentLogger(), serveStatic: true },
+    );
+
+    const page = await app.inject({
+      method: 'GET',
+      url: '/',
+      headers: { host: 'panel.example.com:8443' },
+    });
+    expect(page.statusCode).toBe(200);
+    const csp = String(page.headers['content-security-policy']);
+    expect(csp).not.toContain('unsafe-inline');
+    expect(csp).toContain("connect-src 'self' ws://panel.example.com:8443 wss://panel.example.com:8443");
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1] ?? '';
+    expect(nonce.length).toBeGreaterThan(0);
+    expect(page.body).toContain(`name="csp-nonce" content="${nonce}"`);
+    expect(String(page.headers['cache-control'])).toContain('no-store');
+
+    const fallback = await app.inject({
+      method: 'GET',
+      url: '/instances/abc/console',
+      headers: { host: 'panel.example.com:8443' },
+    });
+    expect(fallback.statusCode).toBe(200);
+    expect(fallback.body).toMatch(/name="csp-nonce" content="[^"]+"/);
+
+    const invalid = await app.inject({
+      method: 'GET',
+      url: '/',
+      headers: { host: 'evil.example; script-src *' },
+    });
+    const invalidCsp = String(invalid.headers['content-security-policy']);
+    expect(invalidCsp).toContain("connect-src 'self'");
+    expect(invalidCsp).not.toContain('evil.example');
 
     await app.close();
   });

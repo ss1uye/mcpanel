@@ -4,9 +4,16 @@ import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import Fastify, {
+  LogController,
+  type FastifyBaseLogger,
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from 'fastify';
 import { ZodError } from 'zod';
 import { PANEL_VERSION } from '@mcpanel/shared';
 import { csrfUserInfo, type LoginThrottle } from './auth/guard';
@@ -45,6 +52,12 @@ import type { TaskTracker } from './services/task-tracker';
 import { AppError } from './utils/errors';
 import { WsHub } from './ws/hub';
 
+declare module 'fastify' {
+  interface FastifyRequest {
+    cspNonce: string;
+  }
+}
+
 export interface AppServices {
   sessions: SessionService;
   audit: AuditService;
@@ -81,22 +94,37 @@ export function shouldServeSpa(url: string, method: string): boolean {
   return !isFileLike || pathname.endsWith('.html');
 }
 
-const SECURITY_HEADERS: Record<string, string> = {
+const BASE_SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy': [
+};
+
+const HOST_PATTERN = /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/;
+
+export function buildCsp(host: string | undefined, nonce: string): string {
+  const connect = ["'self'"];
+  if (host && HOST_PATTERN.test(host)) connect.push(`ws://${host}`, `wss://${host}`);
+  return [
     "default-src 'self'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
+    `style-src 'self' 'nonce-${nonce}'`,
     "img-src 'self' data:",
     "font-src 'self'",
-    "connect-src 'self' ws: wss:",
+    `connect-src ${connect.join(' ')}`,
     "frame-ancestors 'none'",
     "base-uri 'none'",
     "form-action 'none'",
-  ].join('; '),
-};
+  ].join('; ');
+}
+
+export function renderIndex(template: string, nonce: string): string {
+  const replaced = template.replaceAll('__CSP_NONCE__', nonce);
+  if (replaced.includes('name="csp-nonce"')) return replaced;
+  return replaced.includes('</head>')
+    ? replaced.replace('</head>', `<meta name="csp-nonce" content="${nonce}" /></head>`)
+    : replaced;
+}
 
 export async function buildApp(
   config: AppConfig,
@@ -125,9 +153,14 @@ export async function buildApp(
 
   app.decorateRequest('user', null);
   app.decorateRequest('sessionToken', null);
+  app.decorateRequest('cspNonce', '');
+  app.addHook('onRequest', async (request) => {
+    request.cspNonce = randomBytes(16).toString('base64');
+  });
 
-  app.addHook('onSend', async (_request, reply, payload) => {
-    for (const [header, value] of Object.entries(SECURITY_HEADERS)) reply.header(header, value);
+  app.addHook('onSend', async (request, reply, payload) => {
+    for (const [header, value] of Object.entries(BASE_SECURITY_HEADERS)) reply.header(header, value);
+    reply.header('Content-Security-Policy', buildCsp(request.headers.host, request.cspNonce));
     return payload;
   });
 
@@ -165,14 +198,21 @@ export async function buildApp(
 
   const serveStatic = options.serveStatic ?? config.nodeEnv !== 'test';
   const hasSpa = serveStatic && fs.existsSync(path.join(config.webDistDir, 'index.html'));
+  const indexTemplate = hasSpa ? fs.readFileSync(path.join(config.webDistDir, 'index.html'), 'utf8') : '';
+  const sendIndex = (request: FastifyRequest, reply: FastifyReply) =>
+    reply
+      .type('text/html')
+      .header('Cache-Control', 'no-store')
+      .send(renderIndex(indexTemplate, request.cspNonce));
+
   if (hasSpa) {
-    await app.register(fastifyStatic, { root: config.webDistDir });
+    await app.register(fastifyStatic, { root: config.webDistDir, index: false });
+    app.get('/', sendIndex);
+    app.get('/index.html', sendIndex);
   }
 
   app.setNotFoundHandler((request, reply) => {
-    if (hasSpa && shouldServeSpa(request.url, request.method)) {
-      return reply.type('text/html').sendFile('index.html');
-    }
+    if (hasSpa && shouldServeSpa(request.url, request.method)) return sendIndex(request, reply);
     return reply.status(404).send({ error: { code: 'NOT_FOUND', message: '资源不存在' } });
   });
 
