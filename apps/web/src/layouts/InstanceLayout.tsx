@@ -2,13 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PanelRight, Play, RotateCw, Skull, Square, Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
-import type { InstanceInfo, InstanceStatusSnapshot, RconStatus } from '@mcpanel/shared';
+import type { InstanceInfo, InstanceStatusSnapshot } from '@mcpanel/shared';
 import { api, ApiError } from '../api/client';
+import { InstanceRightPanel } from '../components/InstanceRightPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { Button, ConfirmDialog, ErrorState, Spinner, toast } from '../components/ui';
 import { useInstanceStatus } from '../stores/realtime';
 import { cn } from '../utils/cn';
-import { RCON_LABELS } from '../utils/labels';
 
 export interface InstanceOutletContext {
   instance: InstanceInfo;
@@ -34,10 +34,6 @@ const tabs = [
   { to: 'config', label: '配置' },
   { to: 'settings', label: '设置' },
 ];
-
-function rconLabel(status: RconStatus): string {
-  return RCON_LABELS[status];
-}
 
 export function InstanceLayout() {
   const { id = '' } = useParams();
@@ -189,34 +185,7 @@ export function InstanceLayout() {
         </div>
         {rightOpen && (
           <aside className="hidden w-72 shrink-0 lg:block">
-            <div className="sticky top-4 flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
-              <div className="font-medium">运行状态</div>
-              <div className="flex justify-between gap-3 text-[var(--muted)]">
-                <span>状态</span>
-                <StatusBadge state={state} />
-              </div>
-              <div className="flex justify-between gap-3 text-[var(--muted)]">
-                <span>PID</span>
-                <span className="tabular-nums">{status.pid ?? '—'}</span>
-              </div>
-              <div className="flex justify-between gap-3 text-[var(--muted)]">
-                <span>RCON</span>
-                <span>{rconLabel(instance.rconStatus)}</span>
-              </div>
-              <div className="flex justify-between gap-3 text-[var(--muted)]">
-                <span>启动命令</span>
-                <span className="console-font max-w-[60%] truncate" title={instance.startCommand}>
-                  {instance.startCommand}
-                </span>
-              </div>
-              {status.error && <div className="rounded-md bg-red-500/10 p-2 text-xs text-[var(--danger)]">{status.error}</div>}
-              <Link
-                to="console"
-                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface-2)] text-sm"
-              >
-                打开控制台
-              </Link>
-            </div>
+            <InstanceRightPanel instance={instance} status={status} />
           </aside>
         )}
       </div>
