@@ -4,11 +4,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import yauzl from 'yauzl';
 import type { FileEntryInfo, FileListResult, TextFileContent } from '@mcpanel/shared';
 import type { PathSandbox } from '../nodes/path-sandbox';
 import { AppError } from '../utils/errors';
 import { writeFileAtomic } from '../utils/fs-atomic';
+import { extractZipSafe } from '../utils/zip-extract';
 
 export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 const MAX_ZIP_ENTRIES = 100_000;
@@ -35,16 +35,6 @@ const BINARY_EXTENSIONS = new Set([
 
 function isEnoent(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === 'ENOENT';
-}
-
-function isUnsafeEntry(name: string): boolean {
-  const normalized = name.replaceAll('\\', '/');
-  return (
-    normalized.startsWith('/') ||
-    /^[A-Za-z]:/.test(normalized) ||
-    normalized.split('/').some((segment) => segment === '..') ||
-    normalized.includes('\0')
-  );
 }
 
 export class FileService {
@@ -211,62 +201,12 @@ export class FileService {
       ? this.sandbox.normalizeRelative(targetDir)
       : path.posix.dirname(sourceRel) === '.' ? '' : path.posix.dirname(sourceRel);
     const destination = await this.sandbox.resolve(root, destinationRel);
-    await fs.mkdir(destination, { recursive: true });
-
-    const entries = await new Promise<number>((resolve, reject) => {
-      yauzl.open(archivePath, { lazyEntries: true, autoClose: true }, (openError, zip) => {
-        if (openError || !zip) {
-          reject(new AppError('ZIP_INVALID', '压缩包无法打开'));
-          return;
-        }
-        let count = 0;
-        let totalBytes = 0;
-        let settled = false;
-        const fail = (error: unknown) => {
-          if (settled) return;
-          settled = true;
-          zip.close();
-          reject(error instanceof AppError ? error : new AppError('ZIP_INVALID', '解压失败'));
-        };
-        zip.on('error', fail);
-        zip.on('end', () => {
-          if (settled) return;
-          settled = true;
-          resolve(count);
-        });
-        zip.on('entry', (entry: yauzl.Entry) => {
-          count += 1;
-          totalBytes += entry.uncompressedSize;
-          if (count > MAX_ZIP_ENTRIES) return fail(new AppError('ZIP_INVALID', '压缩包条目过多'));
-          if (totalBytes > MAX_ZIP_BYTES) return fail(new AppError('ZIP_INVALID', '解压后体积超过 10 GB'));
-          if (isUnsafeEntry(entry.fileName)) return fail(new AppError('ZIP_INVALID', '压缩包包含越界路径'));
-          const mode = (entry.externalFileAttributes >>> 16) & 0o170000;
-          if (mode === 0o120000) return fail(new AppError('ZIP_INVALID', '压缩包包含符号链接条目'));
-
-          if (entry.fileName.endsWith('/')) {
-            zip.readEntry();
-            return;
-          }
-          zip.openReadStream(entry, (streamError, readStream) => {
-            if (streamError || !readStream) {
-              fail(streamError ?? new AppError('ZIP_INVALID', '无法读取压缩包条目'));
-              return;
-            }
-            const outRel = destinationRel === '' ? entry.fileName : `${destinationRel}/${entry.fileName}`;
-            void this.sandbox
-              .resolve(root, outRel)
-              .then(async (outFile) => {
-                await fs.mkdir(path.dirname(outFile), { recursive: true });
-                await pipeline(readStream, createWriteStream(outFile));
-                zip.readEntry();
-              })
-              .catch(fail);
-          });
-        });
-        zip.readEntry();
-      });
+    const result = await extractZipSafe(archivePath, destination, {
+      maxEntries: MAX_ZIP_ENTRIES,
+      maxBytes: MAX_ZIP_BYTES,
+      resolveTarget: (name) => this.sandbox.resolve(root, destinationRel ? `${destinationRel}/${name}` : name),
     });
-    return { entries };
+    return { entries: result.entries };
   }
 
   async toggleMod(root: string, relPath: string): Promise<{ path: string }> {

@@ -17,6 +17,7 @@
     "@fastify/static": "^8.0.0",
     "@fastify/websocket": "^11.0.0",
     "@mcpanel/shared": "0.1.0",
+    "archiver": "^8.0.0",
     "argon2": "^0.44.0",
     "better-sqlite3": "^12.0.0",
     "drizzle-orm": "^0.44.0",
@@ -32,6 +33,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@types/archiver": "^8.0.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/pidusage": "^2.0.5",
     "@types/ws": "^8.18.2",

@@ -843,7 +843,7 @@ export async function extractZipSafe(
 import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import type { BackupManifest } from '@mcpanel/shared';
 import { DEFAULT_EXCLUDES } from './backup-sources';
 
@@ -883,7 +883,7 @@ export async function writeBackupArchive(options: ArchiveOptions): Promise<numbe
 
   await fs.mkdir(path.dirname(options.destination), { recursive: true });
   const output = createWriteStream(options.destination);
-  const archive = archiver('zip', { zlib: { level: 6 } });
+  const archive = new ZipArchive({ zlib: { level: 6 } });
 
   const done = new Promise<number>((resolve, reject) => {
     output.on('close', () => resolve(archive.pointer()));
