@@ -84,7 +84,7 @@ for (const [instanceId, message] of restoreLeftovers) {
   supervisor.forceRecoveryUnknown(instanceId, message);
 }
 
-const metrics = new MetricsService({ supervisor, db: handle.db, dataDir: config.dataDir });
+const metrics = new MetricsService({ supervisor, db: handle.db, dataDir: config.dataDir, logger });
 const players = new PlayersService(sandbox, rcon, (instanceId) => supervisor.getStatus(instanceId).state);
 const settings = new SettingsService(handle.db);
 

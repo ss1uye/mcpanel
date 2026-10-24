@@ -20,7 +20,7 @@ npm run build && npm start        # 生产：http://127.0.0.1:3000
 
 ```bash
 npm run typecheck      # 0 错误
-npm test               # server 224 / web 52 / shared 12
+npm test               # server 225 / web 52 / shared 12
 npm run lint
 npm run build
 npm run test:e2e       # Playwright Chromium，约 10s
@@ -83,6 +83,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - **锁**：`InstanceSupervisor.runExclusive` 同时串行化启动/停止/重启/强杀/备份/恢复；路由用同步 `assertIdle` 返回 409 `BACKUP_BUSY`。
 - **启动命令**：POSIX 下驱动会把裸 `start.sh` / `run.sh` 补成 `./…` 再交给 `/bin/sh`，避免 PATH 不含当前目录导致 `command not found`。
 - **Java 路径**：实例的 `java_path` 既用于启动前校验，也会在启动时把其所在目录前置到 `PATH` 并设置 `JAVA_HOME`；启动阶段出现 `Unsupported class file major version` / `UnsupportedClassVersionError` 会结束残留启动器并标记 `crashed`。
+- **指标采样**：单次采集失败（例如 Windows 上的 `EBUSY`）只记录 `warn` 并跳过本次，不再触发进程级 unhandledRejection 导致面板退出。
 - **计划任务**：croner、独立时区、重叠跳过、不补跑、每计划保留 100 条运行记录；删除实例前先 `forgetInstance`；列表/创建/更新返回 `nextRuns`（3 条），`GET /api/instances/:id/schedules/preview` 供表单预览。
 - **CSP**：每请求 nonce；`style-src 'self' 'nonce-…'`；`connect-src 'self' ws://<Host> wss://<Host>`；`TRUST_PROXY=true` 时优先 `X-Forwarded-Host`。HTML 模板 `apps/web/index.html` 的 `__CSP_NONCE__` 由服务端按请求替换（`no-store`）；CodeMirror 用 `EditorView.cspNonce`，Radix 动态样式通过 `window.__webpack_nonce__`。
 - **面板库快照**：`PanelBackupService` 使用 better-sqlite3 `backup()` 写入 `data/tmp/panel-*.db`，下载流关闭后删除；CLI 为 `scripts/backup-panel-db.mjs`；审计动作 `panel.backup`。
@@ -127,6 +128,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 8. 上传与解压没有磁盘空间预检（备份/恢复已有）；删除实例的备份目录用同步 `rmSync`，大目录会短暂阻塞事件循环。
 9. 登录限速按 `request.ip`：`TRUST_PROXY=true` 且前面没有净化 `X-Forwarded-For` 的反代时可被伪造头绕过；共享出口 IP 时可反向锁死管理员 15 分钟。
 10. WS 连接在会话吊销（登出/改密码）后仍存活到断开为止；前端上传无进度/不可取消，WS 心跳不校验 pong（休眠恢复后连接可能假死约 10 分钟）。
+11. 面板进程异常退出时，Windows 上启动器 `cmd.exe` 可能先退出而 JVM 继续运行；重启后面板按 `last_pid` 只会把实例标记为 `crashed`，无法接管该 JVM，需要人工结束进程后重新启动实例。
 
 ## 10. 建议的下一步
 

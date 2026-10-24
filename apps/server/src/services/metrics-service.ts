@@ -1,5 +1,6 @@
 import pidusage from 'pidusage';
 import si from 'systeminformation';
+import type { Logger } from 'pino';
 import { eq } from 'drizzle-orm';
 import { PANEL_VERSION, type ProcessMetricsSample, type ServerWsMessage, type SystemMetricsSample } from '@mcpanel/shared';
 import type { DB } from '../db/client';
@@ -103,6 +104,7 @@ export interface MetricsDeps {
   supervisor: InstanceSupervisor;
   db: DB;
   dataDir: string;
+  logger?: Pick<Logger, 'warn'>;
 }
 
 export class MetricsService {
@@ -187,6 +189,10 @@ export class MetricsService {
         this.instanceHistory.set(instanceId, history.slice(-HISTORY_SIZE));
         this.sink?.({ type: 'metrics.sample', target: 'instance', instanceId, ts: sample.ts, sample });
       }
+    } catch (error) {
+      // A single failed sample (e.g. Windows EBUSY while the OS is busy) must
+      // not become an unhandled rejection and take down the whole panel.
+      this.deps.logger?.warn({ err: error }, 'metrics sampling failed');
     } finally {
       this.sampling = false;
     }

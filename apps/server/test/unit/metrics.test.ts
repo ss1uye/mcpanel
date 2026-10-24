@@ -81,6 +81,36 @@ describe('MetricsService', () => {
     service.stop();
   });
 
+  it('keeps sampling after a system sample rejects', async () => {
+    vi.useFakeTimers();
+    const ctx = createTestDb();
+    contexts.push(ctx);
+    const system = vi
+      .fn<MetricsCollector['system']>()
+      .mockRejectedValueOnce(new Error('EBUSY: resource busy or locked, read'))
+      .mockResolvedValue(systemSample());
+    const collector: MetricsCollector = {
+      system,
+      instance: async () => ({ ts: new Date().toISOString(), cpu: 1, memBytes: 1, diskFreeBytes: 1 }),
+    };
+    const service = new MetricsService({
+      collector,
+      supervisor: {} as InstanceSupervisor,
+      db: ctx.db,
+      dataDir: ctx.dir,
+    });
+    const messages: ServerWsMessage[] = [];
+    service.setSink((message) => messages.push(message));
+
+    service.setSystemActive(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(system).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(system).toHaveBeenCalledTimes(2);
+    expect(messages.some((message) => message.type === 'metrics.sample' && message.target === 'system')).toBe(true);
+    service.stop();
+  });
+
   it('skips instances that are not running and keeps at most 60 samples', async () => {
     const ctx = createTestDb();
     contexts.push(ctx);
