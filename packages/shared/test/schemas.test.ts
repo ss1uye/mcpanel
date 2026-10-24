@@ -11,7 +11,12 @@ import {
 import { playerActionSchema } from '../src/schemas/players';
 import { filePathSchema, saveFileSchema, renameSchema } from '../src/schemas/files';
 import { panelSettingsSchema } from '../src/schemas/settings';
-import { createScheduleSchema, updateScheduleSchema, restoreBackupSchema } from '../src/schemas/automation';
+import {
+  createScheduleSchema,
+  updateScheduleSchema,
+  restoreBackupSchema,
+  schedulePreviewSchema,
+} from '../src/schemas/automation';
 
 describe('shared contracts', () => {
   it('rejects a password shorter than 12 characters', () => {
@@ -121,5 +126,14 @@ describe('phase 3 schemas', () => {
     expect(() => updateScheduleSchema.parse({})).toThrow();
     expect(() => restoreBackupSchema.parse({})).toThrow();
     expect(restoreBackupSchema.parse({ confirm: true })).toEqual({ confirm: true });
+  });
+
+  it('validates schedule preview queries', () => {
+    expect(schedulePreviewSchema.parse({ cron: '0 4 * * *', timezone: 'Asia/Shanghai' })).toEqual({
+      cron: '0 4 * * *',
+      timezone: 'Asia/Shanghai',
+    });
+    expect(() => schedulePreviewSchema.parse({ cron: '', timezone: 'Asia/Shanghai' })).toThrow();
+    expect(() => schedulePreviewSchema.parse({ cron: '0 4 * * *', timezone: 'Mars/Base' })).toThrow();
   });
 });

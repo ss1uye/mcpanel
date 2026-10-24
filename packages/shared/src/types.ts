@@ -258,6 +258,7 @@ export interface ScheduleInfo {
   enabled: boolean;
   lastRunAt: string | null;
   nextRunAt: string | null;
+  nextRuns: string[];
   createdAt: string;
 }
 

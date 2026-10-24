@@ -62,3 +62,8 @@ export const updateScheduleSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: '至少提供一个要修改的字段' });
 
 export const restoreBackupSchema = z.object({ confirm: z.literal(true) });
+
+export const schedulePreviewSchema = z.object({
+  cron: z.string().trim().min(1).max(120),
+  timezone,
+});
