@@ -5,7 +5,7 @@ import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
 import fs from 'node:fs';
 import path from 'node:path';
-import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { PANEL_VERSION } from '@mcpanel/shared';
 import { csrfUserInfo, type LoginThrottle } from './auth/guard';
@@ -15,10 +15,12 @@ import type { DB } from './db/client';
 import { silentLogger } from './logger';
 import { registerAuditRoutes } from './routes/audit';
 import { registerAuthRoutes } from './routes/auth';
+import { registerFileRoutes } from './routes/files';
 import { registerInstanceRoutes } from './routes/instances';
 import { registerSystemRoutes } from './routes/system';
 import type { LocalNodeDriver } from './nodes/local-driver';
 import type { AuditService } from './services/audit-service';
+import type { FileService } from './services/file-service';
 import type { InstanceService } from './services/instance-service';
 import type { InstanceSupervisor } from './services/instance-supervisor';
 import type { MetricsService } from './services/metrics-service';
@@ -37,6 +39,7 @@ export interface AppServices {
   driver?: LocalNodeDriver;
   probe?: ProbeService;
   metrics?: MetricsService;
+  files?: FileService;
 }
 
 export interface BuildAppOptions {
@@ -80,7 +83,7 @@ export async function buildApp(
     loggerInstance: options.logger ?? silentLogger(),
     trustProxy: config.trustProxy,
     // The dashboard polls system metrics every 15s; per-request lines would drown real signals.
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
   });
 
   await app.register(cookie);
@@ -163,6 +166,16 @@ export async function buildApp(
       rcon: services.rcon,
       driver: services.driver,
       probe: services.probe,
+    });
+  }
+
+  if (services.instances && services.files) {
+    registerFileRoutes(app, {
+      sessions: services.sessions,
+      audit: services.audit,
+      instances: services.instances,
+      files: services.files,
+      config,
     });
   }
 

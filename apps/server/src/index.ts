@@ -13,6 +13,7 @@ import { createLogger } from './logger';
 import { LocalNodeDriver } from './nodes/local-driver';
 import { PathSandbox } from './nodes/path-sandbox';
 import { AuditService } from './services/audit-service';
+import { FileService } from './services/file-service';
 import { InstanceService } from './services/instance-service';
 import { InstanceSupervisor } from './services/instance-supervisor';
 import { MetricsService } from './services/metrics-service';
@@ -38,6 +39,7 @@ const sessions = new SessionService(handle.db);
 const audit = new AuditService(handle.db, logger);
 const instances = new InstanceService(handle.db, config.dataDir);
 const sandbox = new PathSandbox(config.dataDir);
+const files = new FileService(sandbox);
 const driver = new LocalNodeDriver(sandbox);
 const rcon = new RconService();
 const probe = new ProbeService(sandbox);
@@ -53,7 +55,7 @@ if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
 const app = await buildApp(
   config,
   handle.db,
-  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics },
+  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files },
   { logger, serveStatic },
 );
 
