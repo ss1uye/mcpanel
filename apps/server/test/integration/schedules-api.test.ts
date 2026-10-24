@@ -39,6 +39,7 @@ async function makeApp() {
     instances,
     supervisor,
     backups: { startCreate: vi.fn() } as never,
+    audit: new AuditService(ctx.db),
     logger: silentLogger(),
   });
   const app = await buildApp(

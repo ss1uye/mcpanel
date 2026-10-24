@@ -42,6 +42,7 @@ export function ScheduleForm({
   onSubmit: (value: ScheduleFormValue) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
+  const [zone, setZone] = useState(initial?.timezone ?? timezone);
   const [preset, setPreset] = useState(
     initial && PRESETS.some((item) => item.value === initial.cron) ? initial.cron : initial ? 'custom' : '0 4 * * *',
   );
@@ -54,14 +55,14 @@ export function ScheduleForm({
   const missingPayload =
     (actionType === 'command' && command.trim().length === 0) ||
     (actionType === 'broadcast' && message.trim().length === 0);
-  const invalid = name.trim().length === 0 || cron.trim().length === 0 || missingPayload;
+  const invalid = name.trim().length === 0 || cron.trim().length === 0 || zone.trim().length === 0 || missingPayload;
 
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
       title={initial ? '编辑计划' : '新建计划'}
-      description={`时区：${timezone}；面板离线期间错过的任务不会补跑。`}
+      description="每个计划可以使用独立时区；面板离线期间错过的任务不会补跑。"
       footer={
         <>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
@@ -73,7 +74,7 @@ export function ScheduleForm({
               onSubmit({
                 name: name.trim(),
                 cron: cron.trim(),
-                timezone,
+                timezone: zone.trim(),
                 actionType,
                 command: actionType === 'command' ? command.trim() : undefined,
                 message: actionType === 'broadcast' ? message.trim() : undefined,
@@ -116,6 +117,9 @@ export function ScheduleForm({
             </Select>
           </Field>
         </div>
+        <Field label="时区" hint={`面板默认：${timezone}`}>
+          <Input value={zone} maxLength={64} onChange={(event) => setZone(event.target.value)} />
+        </Field>
         <Field label="cron 表达式" hint="分 时 日 月 周，例如 0 4 * * *">
           <Input value={cron} readOnly={preset !== 'custom'} onChange={(event) => setCron(event.target.value)} />
         </Field>

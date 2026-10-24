@@ -25,6 +25,8 @@ export async function resetPassword(dbPath, username, password) {
 }
 
 async function main() {
+  const envFile = path.join(repoRoot, '.env');
+  if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
   const dataDir = path.resolve(repoRoot, process.env.DATA_DIR ?? 'data');
   const dbPath = path.join(dataDir, 'panel.db');
   if (!fs.existsSync(dbPath)) throw new Error(`找不到数据库：${dbPath}`);

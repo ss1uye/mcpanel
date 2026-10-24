@@ -7,7 +7,7 @@ import { api, ApiError } from '../api/client';
 import { InstanceRightPanel } from '../components/InstanceRightPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { Button, ConfirmDialog, ErrorState, Spinner, toast } from '../components/ui';
-import { useInstanceStatus } from '../stores/realtime';
+import { useInstanceStatus, useRealtime } from '../stores/realtime';
 import { cn } from '../utils/cn';
 
 export interface InstanceOutletContext {
@@ -41,6 +41,9 @@ export function InstanceLayout() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
   const live = useInstanceStatus(id);
+  const taskBusy = useRealtime((store) =>
+    Object.values(store.tasks).some((task) => task.instanceId === id && task.status === 'running'),
+  );
   const query = useQuery({
     queryKey: ['instances', id],
     queryFn: () => api.get<InstanceInfo>(`/instances/${id}`),
@@ -99,7 +102,7 @@ export function InstanceLayout() {
     error: instance.lastError,
   };
   const state = status.state;
-  const busy = state === 'starting' || state === 'stopping' || action.isPending;
+  const busy = state === 'starting' || state === 'stopping' || action.isPending || taskBusy;
   const canRestart = state === 'running' || state === 'orphaned' || state === 'stopped' || state === 'crashed';
 
   const toggleRight = () => {
@@ -146,12 +149,16 @@ export function InstanceLayout() {
             <RotateCw className="h-4 w-4" />
             重启
           </Button>
-          <Button variant="secondary" disabled={!status.pid || state === 'stopped'} onClick={() => setKillOpen(true)}>
+          <Button
+            variant="secondary"
+            disabled={!status.pid || state === 'stopped' || taskBusy}
+            onClick={() => setKillOpen(true)}
+          >
             <Skull className="h-4 w-4" />
             强制结束
           </Button>
           {state === 'unknown' && (
-            <Button variant="secondary" onClick={() => setMarkOpen(true)}>
+            <Button variant="secondary" disabled={taskBusy} onClick={() => setMarkOpen(true)}>
               <Wrench className="h-4 w-4" />
               标记已停止
             </Button>

@@ -48,6 +48,7 @@ async function makeApp() {
     markStopped: vi.fn(async () => undefined),
     sendCommand: vi.fn(async () => undefined),
     forget: vi.fn(),
+    isBusy: () => false,
     getRecentLines: vi.fn(async () => [
       { seq: 1, ts: new Date().toISOString(), stream: 'stdout', level: 'info', text: 'hello' },
     ]),

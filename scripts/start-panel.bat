@@ -23,6 +23,12 @@ if not exist node_modules (
 )
 
 if not exist apps\web\dist\index.html (
+  set NEED_BUILD=1
+)
+if not exist apps\server\dist\index.js (
+  set NEED_BUILD=1
+)
+if defined NEED_BUILD (
   echo Building panel...
   call npm run build
   if errorlevel 1 ( pause & exit /b 1 )

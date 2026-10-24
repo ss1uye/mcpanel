@@ -56,6 +56,8 @@ const supervisor = new InstanceSupervisor({ db: handle.db, driver, rcon, audit, 
 await supervisor.init();
 
 const tasks = new TaskTracker();
+const tasksSweeper = setInterval(() => tasks.cleanup(), 10 * 60_000);
+tasksSweeper.unref();
 const backups = new BackupService({
   db: handle.db,
   dataDir: config.dataDir,
@@ -64,6 +66,7 @@ const backups = new BackupService({
   rcon,
   tasks,
   logger,
+  sandbox,
 });
 const restore = new RestoreService({
   db: handle.db,
@@ -72,9 +75,13 @@ const restore = new RestoreService({
   tasks,
   audit,
   logger,
+  sandbox,
   stateOf: (instanceId) => supervisor.getStatus(instanceId).state,
 });
-await backups.recoverOnBoot();
+const restoreLeftovers = await backups.recoverOnBoot();
+for (const [instanceId, message] of restoreLeftovers) {
+  supervisor.forceRecoveryUnknown(instanceId, message);
+}
 
 const metrics = new MetricsService({ supervisor, db: handle.db, dataDir: config.dataDir });
 const players = new PlayersService(sandbox, rcon, (instanceId) => supervisor.getStatus(instanceId).state);
@@ -84,6 +91,7 @@ const schedules = new ScheduleService({
   instances,
   supervisor,
   backups,
+  audit,
   logger,
 });
 const serveStatic = config.nodeEnv === 'production';
@@ -128,6 +136,7 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
   }
   shuttingDown = true;
   schedules.stop();
+  clearInterval(tasksSweeper);
   logger.info({ reason }, 'shutting down panel; Minecraft servers keep running');
   const guard = setTimeout(() => process.exit(exitCode), SHUTDOWN_TIMEOUT_MS);
   guard.unref();

@@ -80,13 +80,13 @@ data/
 ├─ panel.db        SQLite 元数据（实例、会话、审计）
 ├─ secret.key      自动生成的会话与 CSRF 密钥（勿泄露）
 ├─ backups/        备份（阶段 3）
-├─ tmp/            临时文件与回滚残留
+├─ tmp/            打包临时文件（.part）
 └─ logs/panel.N    面板日志（10 MB 轮转，保留 5 份）
 ```
 
 生产模式下日志同时写入该滚动文件和标准输出，方便前台 `npm start` 直接观察。
 
-实例的 `logs/latest.log` 等服务端文件始终留在实例自己的目录里，面板不会写入实例目录之外的位置。
+实例的 `logs/latest.log` 与服务端文件始终留在实例目录里；恢复过程中的 `restore-*` / `rollback-*` 目录位于实例内的 `.mcpanel-tmp/`，面板不会写入实例目录之外的位置。
 
 ## 安全
 

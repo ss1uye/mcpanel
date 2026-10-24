@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { PathSandbox } from '../../src/nodes/path-sandbox';
 import { silentLogger } from '../../src/logger';
 import { AuditService } from '../../src/services/audit-service';
 import { BackupService } from '../../src/services/backup-service';
@@ -37,10 +38,13 @@ async function setup() {
         exitCode: null,
         error: null,
       }),
+      runExclusive: async (_id: string, task: () => Promise<unknown>) => task(),
+      isBusy: () => false,
     } as never,
     rcon: { statusFor: async () => 'disabled', send: async () => '' } as never,
     tasks,
     logger: silentLogger(),
+    sandbox: new PathSandbox(dir),
   });
   const restore = new RestoreService({
     db: ctx.db,
@@ -49,6 +53,7 @@ async function setup() {
     tasks,
     audit,
     logger: silentLogger(),
+    sandbox: new PathSandbox(dir),
   });
   return { dir, root, instance, backups, restore };
 }
@@ -93,6 +98,7 @@ describe('RestoreService', () => {
       tasks: new TaskTracker(),
       audit: new AuditService(ctx!.db),
       logger: silentLogger(),
+      sandbox: new PathSandbox(dir),
       stateOf: () => 'running',
     });
     await expect(running.preflight(instance, created.backupId)).rejects.toMatchObject({

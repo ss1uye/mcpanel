@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { PathSandbox } from '../../src/nodes/path-sandbox';
 import { silentLogger } from '../../src/logger';
 import { BackupService } from '../../src/services/backup-service';
 import { RconService } from '../../src/services/rcon-service';
@@ -40,6 +41,8 @@ async function setup() {
       exitCode: null,
       error: null,
     }),
+    runExclusive: async (_id: string, task: () => Promise<unknown>) => task(),
+    isBusy: () => false,
   } as never;
   const service = new BackupService({
     db: ctx.db,
@@ -49,6 +52,7 @@ async function setup() {
     rcon,
     tasks: new TaskTracker(),
     logger: silentLogger(),
+    sandbox: new PathSandbox(dir),
   });
   return { service, instance, rcon, fake };
 }

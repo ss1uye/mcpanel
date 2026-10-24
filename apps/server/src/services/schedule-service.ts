@@ -6,6 +6,7 @@ import { Cron } from 'croner';
 import type { DB } from '../db/client';
 import { scheduleRuns, schedules, type InstanceRow } from '../db/schema';
 import { AppError } from '../utils/errors';
+import type { AuditService } from './audit-service';
 import type { BackupService } from './backup-service';
 import type { InstanceService } from './instance-service';
 import type { InstanceSupervisor } from './instance-supervisor';
@@ -25,6 +26,7 @@ export interface ScheduleServiceDeps {
   instances: InstanceService;
   supervisor: InstanceSupervisor;
   backups: BackupService;
+  audit: AuditService;
   logger: Logger;
 }
 
@@ -61,7 +63,7 @@ function toRunInfo(row: typeof scheduleRuns.$inferSelect): ScheduleRunInfo {
 }
 
 export class ScheduleService {
-  private readonly jobs = new Map<string, Cron>();
+  private readonly jobs = new Map<string, { job: Cron; instanceId: string }>();
   private readonly running = new Set<string>();
 
   constructor(private readonly deps: ScheduleServiceDeps) {}
@@ -133,6 +135,12 @@ export class ScheduleService {
       message: patch.message !== undefined ? patch.message : current.message,
       enabled: patch.enabled ?? current.enabled,
     };
+    if (merged.actionType === 'command' && !merged.command) {
+      throw new AppError('VALIDATION_ERROR', 'command 动作需要命令内容');
+    }
+    if (merged.actionType === 'broadcast' && !merged.message) {
+      throw new AppError('VALIDATION_ERROR', 'broadcast 动作需要广播内容');
+    }
     const next = this.validate(merged);
     this.deps.db
       .update(schedules)
@@ -155,7 +163,7 @@ export class ScheduleService {
 
   remove(row: InstanceRow, scheduleId: string): void {
     this.get(row, scheduleId);
-    this.jobs.get(scheduleId)?.stop();
+    this.jobs.get(scheduleId)?.job.stop();
     this.jobs.delete(scheduleId);
     this.deps.db.delete(schedules).where(eq(schedules.id, scheduleId)).run();
   }
@@ -173,14 +181,15 @@ export class ScheduleService {
   }
 
   stop(): void {
-    for (const job of this.jobs.values()) job.stop();
+    for (const entry of this.jobs.values()) entry.job.stop();
     this.jobs.clear();
   }
 
   forgetInstance(instanceId: string): void {
-    for (const schedule of this.deps.db.select().from(schedules).where(eq(schedules.instanceId, instanceId)).all()) {
-      this.jobs.get(schedule.id)?.stop();
-      this.jobs.delete(schedule.id);
+    for (const [id, entry] of [...this.jobs.entries()]) {
+      if (entry.instanceId !== instanceId) continue;
+      entry.job.stop();
+      this.jobs.delete(id);
     }
   }
 
@@ -200,16 +209,16 @@ export class ScheduleService {
   }
 
   private reschedule(schedule: ScheduleInfo): void {
-    this.jobs.get(schedule.id)?.stop();
+    this.jobs.get(schedule.id)?.job.stop();
     this.jobs.delete(schedule.id);
     if (!schedule.enabled) return;
     const row = this.deps.instances.get(schedule.instanceId);
-    const job = new Cron(schedule.cron, { timezone: schedule.timezone, protect: true }, () => {
+    const job = new Cron(schedule.cron, { timezone: schedule.timezone }, () => {
       void this.execute(row, schedule, 'scheduled').catch((error: unknown) => {
         this.deps.logger.error({ err: error, scheduleId: schedule.id }, 'scheduled run failed');
       });
     });
-    this.jobs.set(schedule.id, job);
+    this.jobs.set(schedule.id, { job, instanceId: schedule.instanceId });
   }
 
   private async execute(
@@ -251,6 +260,12 @@ export class ScheduleService {
       this.trimRuns(schedule.id);
     }
     const run = this.deps.db.select().from(scheduleRuns).where(eq(scheduleRuns.id, runId)).get();
+    this.deps.audit.record({
+      action: 'schedule.run',
+      targetType: 'instance',
+      targetId: row.id,
+      detail: { scheduleId: schedule.id, trigger, status, action: schedule.actionType },
+    });
     return toRunInfo(run!);
   }
 
@@ -262,6 +277,12 @@ export class ScheduleService {
     switch (schedule.actionType) {
       case 'backup':
         await this.deps.backups.startCreate(row, 'scheduled').done;
+        this.deps.audit.record({
+          action: 'backup.create',
+          targetType: 'instance',
+          targetId: row.id,
+          detail: { kind: 'scheduled', scheduleId: schedule.id },
+        });
         return { status: 'success', message: '备份完成' };
       case 'start':
         if (state === 'running' || state === 'orphaned') return { status: 'skipped', message: '服务器已在运行' };
@@ -287,12 +308,24 @@ export class ScheduleService {
           return { status: 'failed', message: '服务器未运行' };
         }
         await this.deps.supervisor.sendCommand(row.id, schedule.command ?? '');
+        this.deps.audit.record({
+          action: 'console.command',
+          targetType: 'instance',
+          targetId: row.id,
+          detail: { command: schedule.command, scheduleId: schedule.id },
+        });
         return { status: 'success', message: '命令已发送' };
       case 'broadcast':
         if (state !== 'running' && state !== 'orphaned') {
           return { status: 'failed', message: '服务器未运行' };
         }
         await this.deps.supervisor.sendCommand(row.id, `say ${schedule.message ?? ''}`);
+        this.deps.audit.record({
+          action: 'console.command',
+          targetType: 'instance',
+          targetId: row.id,
+          detail: { command: `say ${schedule.message ?? ''}`, scheduleId: schedule.id },
+        });
         return { status: 'success', message: '广播已发送' };
     }
   }
@@ -311,6 +344,7 @@ export class ScheduleService {
       .values({ id, scheduleId, trigger, status, message, startedAt, finishedAt })
       .run();
     const row = this.deps.db.select().from(scheduleRuns).where(eq(scheduleRuns.id, id)).get();
+    this.trimRuns(scheduleId);
     return toRunInfo(row!);
   }
 

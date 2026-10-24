@@ -6,6 +6,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import type { DB } from '../db/client';
 import { backups, type InstanceRow } from '../db/schema';
+import type { PathSandbox } from '../nodes/path-sandbox';
 import { diskUsage } from '../utils/disk';
 import { AppError } from '../utils/errors';
 import { writeBackupArchive } from './backup-archive';
@@ -25,7 +26,10 @@ export interface BackupServiceDeps {
   rcon: RconService;
   tasks: TaskTracker;
   logger: Logger;
+  sandbox: PathSandbox;
 }
+
+const LEVEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 function stamp(date: Date): string {
   const compact = date.toISOString().replace(/[-:T]/g, '').slice(0, 14);
@@ -48,7 +52,7 @@ function toInfo(row: typeof backups.$inferSelect): BackupInfo {
 }
 
 export class BackupService {
-  private readonly locks = new Set<string>();
+  private readonly pending = new Set<string>();
   private readonly manifests = new Map<string, BackupManifest & { instanceId: string }>();
 
   constructor(private readonly deps: BackupServiceDeps) {}
@@ -65,7 +69,7 @@ export class BackupService {
 
   manifest(instanceId: string, backupId: string): (BackupManifest & { instanceId: string }) | null {
     const cached = this.manifests.get(backupId);
-    if (cached) return cached;
+    if (cached && cached.instanceId === instanceId) return cached;
     const row = this.deps.db
       .select()
       .from(backups)
@@ -92,8 +96,16 @@ export class BackupService {
     return path.join(this.deps.dataDir, 'backups', instanceId, row.filename);
   }
 
+  /** Synchronous gate the routes can turn into 409 before a task is created. */
+  assertIdle(instanceId: string): void {
+    if (this.pending.has(instanceId) || this.deps.supervisor.isBusy(instanceId)) {
+      throw new AppError('BACKUP_BUSY', '已有备份、恢复或其他实例操作在进行');
+    }
+  }
+
   /** Fast checks the route can surface as 409 before returning 202. */
   async preflight(row: InstanceRow): Promise<void> {
+    this.assertIdle(row.id);
     const state = this.deps.supervisor.getStatus(row.id).state;
     if (state === 'starting' || state === 'stopping' || state === 'unknown') {
       throw new AppError('INVALID_STATE', `当前状态 ${state} 不能备份`);
@@ -110,16 +122,26 @@ export class BackupService {
     row: InstanceRow,
     kind: BackupKind,
   ): { task: TaskInfo; backupId: string; done: Promise<void> } {
+    this.assertIdle(row.id);
+    this.pending.add(row.id);
     const task = this.deps.tasks.start('backup', row.id);
     const backupId = randomUUID();
-    const done = this.withInstanceLock(row.id, () => this.createInternal(row, kind, backupId, task));
+    const done = this.deps.supervisor
+      .runExclusive(row.id, () => this.createInternal(row, kind, backupId, task))
+      .finally(() => {
+        this.pending.delete(row.id);
+      });
     return { task, backupId, done };
+  }
+
+  runExclusive<T>(instanceId: string, task: () => Promise<T>): Promise<T> {
+    return this.deps.supervisor.runExclusive(instanceId, task);
   }
 
   /** Callers must already hold the instance lock (used by restore for pre_restore). */
   async createPreRestore(row: InstanceRow, task: TaskInfo, progressSpan: [number, number]): Promise<string> {
     const backupId = randomUUID();
-    await this.createInternal(row, 'pre_restore', backupId, task, progressSpan);
+    await this.createInternal(row, 'pre_restore', backupId, task, progressSpan, false);
     return backupId;
   }
 
@@ -130,13 +152,16 @@ export class BackupService {
       .where(and(eq(backups.id, backupId), eq(backups.instanceId, row.id)))
       .get();
     if (!backup) throw new AppError('NOT_FOUND', '备份不存在');
-    if (backup.status !== 'ready') throw new AppError('BACKUP_BUSY', '备份正在使用中');
+    if (backup.status === 'creating' || backup.status === 'restoring') {
+      throw new AppError('BACKUP_BUSY', '备份正在使用中');
+    }
     await fs.rm(path.join(this.deps.dataDir, 'backups', row.id, backup.filename), { force: true });
     this.deps.db.delete(backups).where(eq(backups.id, backupId)).run();
     this.manifests.delete(backupId);
   }
 
-  async recoverOnBoot(): Promise<void> {
+  /** Returns instances that need an `unknown` override because a rollback directory is non-empty. */
+  async recoverOnBoot(): Promise<Map<string, string>> {
     const creating = this.deps.db.select().from(backups).where(eq(backups.status, 'creating')).all();
     for (const row of creating) {
       this.deps.db
@@ -149,6 +174,7 @@ export class BackupService {
     for (const row of restoring) {
       this.deps.db.update(backups).set({ status: 'ready' }).where(eq(backups.id, row.id)).run();
     }
+
     const tmpDir = path.join(this.deps.dataDir, 'tmp');
     for (const entry of await fs.readdir(tmpDir).catch(() => [] as string[])) {
       if (!entry.endsWith('.part')) continue;
@@ -156,22 +182,59 @@ export class BackupService {
       const stat = await fs.stat(file).catch(() => null);
       if (stat && Date.now() - stat.mtimeMs > 24 * 3600 * 1000) await fs.rm(file, { force: true });
     }
+
+    const leftovers = new Map<string, string>();
+    for (const instance of this.deps.instances.list()) {
+      const base = path.join(instance.rootPath, '.mcpanel-tmp');
+      const entries = await fs.readdir(base).catch(() => [] as string[]);
+      const nonEmptyRollbacks: string[] = [];
+      for (const entry of entries) {
+        if (!entry.startsWith('rollback-')) continue;
+        const files = await fs.readdir(path.join(base, entry)).catch(() => [] as string[]);
+        if (files.length > 0) nonEmptyRollbacks.push(path.join(base, entry));
+      }
+      if (nonEmptyRollbacks.length > 0) {
+        leftovers.set(instance.id, `恢复未完成，回滚目录保留在：${nonEmptyRollbacks.join('、')}`);
+        continue;
+      }
+      for (const entry of entries) {
+        if (entry.startsWith('restore-') || entry.startsWith('rollback-')) {
+          await fs.rm(path.join(base, entry), { recursive: true, force: true }).catch(() => undefined);
+        }
+      }
+    }
+
     for (const instance of this.deps.instances.list()) {
       const status = this.deps.supervisor.getStatus(instance.id);
       if (status.state !== 'running' && status.state !== 'orphaned') continue;
       const rconStatus = await this.deps.rcon.statusFor(instance);
-      if (rconStatus === 'connected') await this.deps.rcon.send(instance, 'save-on').catch(() => undefined);
+      if (rconStatus === 'connected') {
+        await this.deps.rcon.send(instance, 'save-on').catch((error: unknown) => {
+          this.deps.logger.warn({ err: error, instanceId: instance.id }, 'save-on after boot recovery failed');
+        });
+      }
     }
+    return leftovers;
   }
 
-  async withInstanceLock<T>(instanceId: string, task: () => Promise<T>): Promise<T> {
-    if (this.locks.has(instanceId)) throw new AppError('BACKUP_BUSY', '已有备份或恢复任务在进行');
-    this.locks.add(instanceId);
-    try {
-      return await task();
-    } finally {
-      this.locks.delete(instanceId);
+  private async validateSources(row: InstanceRow): Promise<{ levelName: string; extraPaths: string[] }> {
+    const loaded = await loadServerProperties(row.rootPath).catch(() => null);
+    const levelName = propertyValue(loaded?.parsed ?? null, 'level-name', 'world') || 'world';
+    if (!LEVEL_NAME_PATTERN.test(levelName)) {
+      throw new AppError('INVALID_STATE', 'server.properties 的 level-name 含有非法字符，无法安全备份');
     }
+    let extraPaths: string[];
+    try {
+      const parsed = JSON.parse(row.backupExtraPaths) as unknown;
+      extraPaths = Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    } catch {
+      extraPaths = [];
+    }
+    for (const extra of extraPaths) {
+      // Sandbox resolution rejects `..`, drive letters and symlinked/junctioned parents.
+      await this.deps.sandbox.resolve(row.rootPath, extra);
+    }
+    return { levelName, extraPaths };
   }
 
   private async createInternal(
@@ -180,6 +243,7 @@ export class BackupService {
     backupId: string,
     task: TaskInfo,
     progressSpan: [number, number] = [0, 1],
+    finishTask = true,
   ): Promise<void> {
     const tasks = this.deps.tasks;
     const instanceDir = path.join(this.deps.dataDir, 'backups', row.id);
@@ -197,13 +261,12 @@ export class BackupService {
           throw new AppError('BACKUP_REQUIRES_STOP_OR_RCON', '服务器运行中且 RCON 不可用，请先停服再备份');
         }
       }
-      const loaded = await loadServerProperties(row.rootPath).catch(() => null);
-      const levelName = propertyValue(loaded?.parsed ?? null, 'level-name', 'world') || 'world';
+      const { levelName, extraPaths } = await this.validateSources(row);
       const plan = await planBackupSources(row.rootPath, {
         levelName,
         includeMods: row.backupIncludeMods,
         includeConfig: row.backupIncludeConfig,
-        extraPaths: JSON.parse(row.backupExtraPaths) as string[],
+        extraPaths,
       });
       const disk = await diskUsage(this.deps.dataDir);
       if (disk.free < plan.totalBytes * 1.5) {
@@ -250,7 +313,12 @@ export class BackupService {
       };
       const bytes = running
         ? await withFrozenServer(
-            { rcon: this.deps.rcon, instance: row, logFile: path.join(row.rootPath, 'logs', 'latest.log') },
+            {
+              rcon: this.deps.rcon,
+              instance: row,
+              logFile: path.join(row.rootPath, 'logs', 'latest.log'),
+              logger: this.deps.logger,
+            },
             pack,
           )
         : await pack();
@@ -266,8 +334,12 @@ export class BackupService {
         .where(eq(backups.id, backupId))
         .run();
       this.manifests.set(backupId, { ...manifest, instanceId: row.id });
-      await this.enforceRetention(row);
-      tasks.finish(task.id, 'success', '备份完成');
+      try {
+        await this.enforceRetention(row);
+      } catch (error) {
+        this.deps.logger.warn({ err: error, instanceId: row.id }, 'backup retention failed');
+      }
+      if (finishTask) tasks.finish(task.id, 'success', '备份完成');
     } catch (error) {
       const message = error instanceof AppError ? error.message : '备份失败';
       this.deps.db
@@ -276,7 +348,7 @@ export class BackupService {
         .where(eq(backups.id, backupId))
         .run();
       await fs.rm(tmpFile, { force: true });
-      tasks.finish(task.id, 'failed', message);
+      if (finishTask) tasks.finish(task.id, 'failed', message);
       this.deps.logger.error({ err: error, instanceId: row.id }, 'backup failed');
       throw error;
     }

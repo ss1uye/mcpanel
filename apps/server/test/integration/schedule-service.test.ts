@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AuditService } from '../../src/services/audit-service';
 import { silentLogger } from '../../src/logger';
 import { ScheduleService } from '../../src/services/schedule-service';
 import { createTestDb, type TestDb } from '../helpers/db';
@@ -48,6 +49,7 @@ async function setup() {
         done: Promise.resolve(),
       })),
     } as never,
+    audit: new AuditService(ctx.db),
     logger: silentLogger(),
   });
   const schedule = service.create(instance, {

@@ -28,8 +28,9 @@ export function registerScheduleRoutes(app: FastifyInstance, deps: ScheduleRoute
 
   app.post<{ Params: { id: string } }>('/api/instances/:id/schedules', write, async (request, reply) => {
     const row = instances.get(request.params.id);
-    const timezone = (request.body as { timezone?: string }).timezone ?? settings.get().defaultTimezone;
-    const input = createScheduleSchema.parse({ ...(request.body as object), timezone });
+    const body = (request.body ?? {}) as { timezone?: string };
+    const timezone = body.timezone ?? settings.get().defaultTimezone;
+    const input = createScheduleSchema.parse({ ...body, timezone });
     const created = schedules.create(row, input);
     audit.record({
       userId: request.user?.id,
@@ -88,14 +89,6 @@ export function registerScheduleRoutes(app: FastifyInstance, deps: ScheduleRoute
         throw new AppError('NOT_FOUND', '计划不存在');
       }
       const run = await schedules.runNow(row, request.params.scheduleId);
-      audit.record({
-        userId: request.user?.id,
-        action: 'schedule.run',
-        targetType: 'instance',
-        targetId: row.id,
-        detail: { scheduleId: request.params.scheduleId, status: run.status },
-        ip: request.ip,
-      });
       return reply.send(run);
     },
   );

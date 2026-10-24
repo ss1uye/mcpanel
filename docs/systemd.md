@@ -3,6 +3,11 @@
 面板只监听回环地址，HTTPS 交给反向代理（Caddy/Nginx）。`data/` 与实例目录需要同一
 个低权限账号可读写。
 
+## 0. 前置条件
+
+- Node.js 24.11+ 与 npm 11.16+（与 `package.json` 的 `engines` 一致）；
+- 首次安装依赖若被 npm 11 拦截构建脚本，执行 `npm install-scripts approve`（白名单已在仓库配置中）。
+
 ## 1. 创建账号与目录
 
 ```bash
@@ -85,4 +90,5 @@ sudo systemctl start mcpanel          # 启动时自动迁移数据库
 ## 6. 日志与健康检查
 
 - `journalctl -u mcpanel -f` 或 `data/logs/panel.N`（10 MB 轮转，保留 5 份）
+- 忘记密码时停止面板后执行 `node scripts/reset-password.mjs`（会读取 `.env` 的 `DATA_DIR`）
 - `curl http://127.0.0.1:3000/api/health` → `{"ok":true,"version":"0.1.0"}`

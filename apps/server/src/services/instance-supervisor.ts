@@ -488,6 +488,19 @@ export class InstanceSupervisor extends EventEmitter {
     this.timers.delete(instanceId);
   }
 
+  isBusy(instanceId: string): boolean {
+    return this.locks.has(instanceId);
+  }
+
+  runExclusive<T>(instanceId: string, task: () => Promise<T>): Promise<T> {
+    return this.withLock(instanceId, task);
+  }
+
+  /** Boot-time override used by restore recovery; bypasses the state machine on purpose. */
+  forceRecoveryUnknown(instanceId: string, error: string): void {
+    this.updateState(instanceId, 'unknown', { error });
+  }
+
   private async withLock<T>(instanceId: string, task: () => Promise<T>): Promise<T> {
     if (this.locks.has(instanceId)) throw new AppError('OPERATION_IN_PROGRESS', '实例已有操作在执行');
     this.locks.add(instanceId);

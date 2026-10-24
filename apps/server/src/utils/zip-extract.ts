@@ -1,6 +1,7 @@
 import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import yauzl from 'yauzl';
 import { AppError } from './errors';
@@ -79,7 +80,16 @@ export async function extractZipSafe(
         }
 
         if (entry.fileName.endsWith('/')) {
-          zip.readEntry();
+          const dirName = entry.fileName.replace(/\/+$/, '');
+          if (!dirName) {
+            zip.readEntry();
+            return;
+          }
+          const resolveDir = limits.resolveTarget ?? (async () => path.join(destinationDir, ...dirName.split('/')));
+          void resolveDir(dirName)
+            .then((dir) => fs.mkdir(dir, { recursive: true }))
+            .then(() => zip.readEntry())
+            .catch(fail);
           return;
         }
         zip.openReadStream(entry, (streamError, readStream) => {
@@ -92,7 +102,21 @@ export async function extractZipSafe(
           void resolveTarget(entry.fileName)
             .then(async (out) => {
               await fs.mkdir(path.dirname(out), { recursive: true });
-              await pipeline(readStream, createWriteStream(out));
+              // Count actual bytes: the declared size in the central directory is untrusted.
+              let writtenEntry = 0;
+              const counter = new Transform({
+                transform(chunk: Buffer, _encoding, callback) {
+                  writtenEntry += chunk.length;
+                  bytes += chunk.length;
+                  if (bytes > maxBytes) {
+                    callback(new AppError('ZIP_INVALID', '解压后体积超过上限'));
+                    return;
+                  }
+                  callback(null, chunk);
+                },
+              });
+              await pipeline(readStream, counter, createWriteStream(out));
+              void writtenEntry;
               zip.readEntry();
             })
             .catch(fail);

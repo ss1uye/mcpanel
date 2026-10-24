@@ -18,6 +18,7 @@ describe('writeBackupArchive', () => {
     const root = path.join(dir, 'server');
     await fs.mkdir(path.join(root, 'world'), { recursive: true });
     await fs.writeFile(path.join(root, 'world', 'level.dat'), 'level');
+    await fs.mkdir(path.join(root, 'config'));
     await fs.mkdir(path.join(root, 'logs'));
     await fs.writeFile(path.join(root, 'logs', 'latest.log'), 'log');
     await fs.writeFile(path.join(root, 'server.properties'), 'motd=hi');
@@ -28,14 +29,14 @@ describe('writeBackupArchive', () => {
       panelVersion: '0.1.0',
       instanceName: '生存服',
       createdAt: '2026-10-24T00:00:00.000Z',
-      sources: ['world', 'server.properties'],
+      sources: ['world', 'server.properties', 'config'],
       fileCount: 2,
       totalBytes: 12,
     };
     const progress: number[] = [];
     const bytes = await writeBackupArchive({
       root,
-      sources: ['world', 'server.properties', 'logs'],
+      sources: ['world', 'server.properties', 'config', 'logs'],
       destination: archive,
       manifest,
       onProgress: (value) => progress.push(value),
@@ -50,5 +51,6 @@ describe('writeBackupArchive', () => {
     expect(await fs.readFile(path.join(out, 'world', 'level.dat'), 'utf8')).toBe('level');
     expect(await fs.readFile(path.join(out, 'server.properties'), 'utf8')).toBe('motd=hi');
     await expect(fs.stat(path.join(out, 'logs', 'latest.log'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await fs.stat(path.join(out, 'config'))).isDirectory()).toBe(true);
   });
 });

@@ -101,10 +101,11 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
   app.delete<{ Params: { id: string } }>('/api/instances/:id', write, async (request, reply) => {
     const input = deleteInstanceSchema.parse(request.body);
     const row = instances.get(request.params.id);
+    if (supervisor.isBusy(row.id)) throw new AppError('OPERATION_IN_PROGRESS', '实例仍有操作在执行，请稍后再删除');
+    deps.schedules?.forgetInstance(row.id);
     instances.delete(row, input.confirmName);
     supervisor.forget(row.id);
     rcon.invalidate(row.id);
-    deps.schedules?.forgetInstance(row.id);
     audit.record({
       userId: request.user?.id,
       action: 'instance.delete',
@@ -152,6 +153,9 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
     const state = supervisor.getStatus(row.id).state;
     if (!['stopped', 'unknown', 'crashed'].includes(state)) {
       throw new AppError('INVALID_STATE', '只有在停止或异常状态下才能清理恢复残留');
+    }
+    if (supervisor.isBusy(row.id)) {
+      throw new AppError('OPERATION_IN_PROGRESS', '恢复或备份仍在进行，不能清理残留');
     }
     const input = deleteInstanceSchema.parse(request.body);
     if (input.confirmName !== row.name) {

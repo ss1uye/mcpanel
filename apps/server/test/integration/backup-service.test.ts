@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { PathSandbox } from '../../src/nodes/path-sandbox';
 import { silentLogger } from '../../src/logger';
 import { BackupService } from '../../src/services/backup-service';
 import { TaskTracker } from '../../src/services/task-tracker';
@@ -34,10 +35,13 @@ async function setup(overrides: { backupKeep?: number } = {}) {
         exitCode: null,
         error: null,
       }),
+      runExclusive: async (_id: string, task: () => Promise<unknown>) => task(),
+      isBusy: () => false,
     } as never,
     rcon: { statusFor: async () => 'disabled', send: async () => '' } as never,
     tasks: new TaskTracker(),
     logger: silentLogger(),
+    sandbox: new PathSandbox(dir),
   });
   return { service, instance, dir };
 }
@@ -86,5 +90,34 @@ describe('BackupService', () => {
     await service.recoverOnBoot();
     expect(service.list(instance.id)[0]).toMatchObject({ status: 'failed' });
     await expect(fs.stat(stale)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('reports non-empty rollback leftovers and cleans empty restore directories', async () => {
+    const { service, instance, dir } = await setup();
+    const root = path.join(dir, 'server');
+    await fs.mkdir(path.join(root, '.mcpanel-tmp', 'rollback-keep'), { recursive: true });
+    await fs.writeFile(path.join(root, '.mcpanel-tmp', 'rollback-keep', 'level.dat'), 'left');
+    await fs.mkdir(path.join(root, '.mcpanel-tmp', 'restore-stale'), { recursive: true });
+    await fs.writeFile(path.join(root, '.mcpanel-tmp', 'restore-stale', 'x'), 'x');
+    await fs.mkdir(path.join(root, '.mcpanel-tmp', 'rollback-empty'), { recursive: true });
+
+    const leftovers = await service.recoverOnBoot();
+    expect(leftovers.get(instance.id)).toContain('rollback-keep');
+    // The whole scene is preserved so an operator can inspect it.
+    await expect(fs.stat(path.join(root, '.mcpanel-tmp', 'rollback-keep'))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(root, '.mcpanel-tmp', 'restore-stale'))).resolves.toBeTruthy();
+  });
+
+  it('cleans empty staging directories when no rollback scene exists', async () => {
+    const { service, instance, dir } = await setup();
+    const root = path.join(dir, 'server');
+    await fs.mkdir(path.join(root, '.mcpanel-tmp', 'restore-stale'), { recursive: true });
+    await fs.writeFile(path.join(root, '.mcpanel-tmp', 'restore-stale', 'x'), 'x');
+    await fs.mkdir(path.join(root, '.mcpanel-tmp', 'rollback-empty'), { recursive: true });
+
+    const leftovers = await service.recoverOnBoot();
+    expect(leftovers.has(instance.id)).toBe(false);
+    await expect(fs.stat(path.join(root, '.mcpanel-tmp', 'restore-stale'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(fs.stat(path.join(root, '.mcpanel-tmp', 'rollback-empty'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

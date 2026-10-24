@@ -41,13 +41,24 @@ async function makeApp() {
   const sandbox = new PathSandbox(dataDir);
   const supervisor = {
     getStatus: () => ({ instanceId, state: 'stopped', pid: null, startedAt: null, exitCode: null, error: null }),
+    runExclusive: async (_id: string, task: () => Promise<unknown>) => task(),
+    isBusy: () => false,
   } as unknown as InstanceSupervisor;
   const instances = new InstanceService(ctx.db, dataDir);
   const tasks = new TaskTracker();
   const audit = new AuditService(ctx.db);
   const rcon = new RconService();
-  const backups = new BackupService({ db: ctx.db, dataDir, instances, supervisor, rcon, tasks, logger: silentLogger() });
-  const restore = new RestoreService({ db: ctx.db, dataDir, backups, tasks, audit, logger: silentLogger() });
+  const backups = new BackupService({
+    db: ctx.db,
+    dataDir,
+    instances,
+    supervisor,
+    rcon,
+    tasks,
+    logger: silentLogger(),
+    sandbox,
+  });
+  const restore = new RestoreService({ db: ctx.db, dataDir, backups, tasks, audit, logger: silentLogger(), sandbox });
   const app = await buildApp(
     config,
     ctx.db,

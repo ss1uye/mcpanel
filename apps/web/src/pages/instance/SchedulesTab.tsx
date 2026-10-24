@@ -128,7 +128,8 @@ export function SchedulesTab() {
                   {!schedule.enabled && <span className="text-xs text-[var(--muted)]">已停用</span>}
                 </div>
                 <div className="text-xs text-[var(--muted)]">
-                  {schedule.cron} · {schedule.timezone} · 下次 {formatDateTime(schedule.nextRunAt)}
+                  {schedule.cron} · {schedule.timezone} · 下次 {formatDateTime(schedule.nextRunAt)} · 上次{' '}
+                  {formatDateTime(schedule.lastRunAt)}
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5">

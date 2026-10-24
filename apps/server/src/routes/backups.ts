@@ -58,6 +58,14 @@ export function registerBackupRoutes(app: FastifyInstance, deps: BackupRouteDeps
     read,
     async (request, reply) => {
       const file = backups.filePath(request.params.id, request.params.backupId);
+      audit.record({
+        userId: request.user?.id,
+        action: 'backup.download',
+        targetType: 'instance',
+        targetId: request.params.id,
+        detail: { backupId: request.params.backupId },
+        ip: request.ip,
+      });
       reply.type('application/zip');
       reply.header('Content-Disposition', 'attachment; filename="backup.zip"');
       return reply.send(createReadStream(file));
