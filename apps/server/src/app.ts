@@ -135,6 +135,9 @@ export async function buildApp(
   const app = Fastify({
     loggerInstance: options.logger ?? silentLogger(),
     trustProxy: config.trustProxy,
+    // JSON bodies carry file content up to 2 MB (file save); the 1 MiB default
+    // would let the editor open a large file but reject saving it.
+    bodyLimit: 3 * 1024 * 1024,
     // The dashboard polls system metrics every 15s; per-request lines would drown real signals.
     logController: new LogController({ disableRequestLogging: true }),
   });
@@ -184,6 +187,9 @@ export async function buildApp(
     const code = (error as { code?: string }).code ?? '';
     if (code.startsWith('FST_CSRF')) {
       return reply.status(403).send({ error: { code: 'CSRF_INVALID', message: 'CSRF token 缺失或无效' } });
+    }
+    if (code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+      return reply.status(413).send({ error: { code: 'FILE_TOO_LARGE', message: '请求体超过大小限制' } });
     }
     if (code.startsWith('FST_ERR_CTP')) {
       return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: '请求格式不正确' } });
@@ -319,6 +325,7 @@ export async function buildApp(
       supervisor: services.supervisor,
       metrics: services.metrics,
       tasks: services.tasks,
+      logger: options.logger,
     });
     hub.register(app);
     registerSystemRoutes(app, { sessions: services.sessions, metrics: services.metrics });

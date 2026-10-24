@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { WebSocket } from 'ws';
 import { eq } from 'drizzle-orm';
 import {
@@ -35,6 +35,7 @@ export interface WsHubDeps {
   supervisor: InstanceSupervisor;
   metrics: MetricsService;
   tasks: TaskTracker;
+  logger?: FastifyBaseLogger;
 }
 
 export class WsHub {
@@ -151,7 +152,12 @@ export class WsHub {
     this.send(conn, { type: 'hello', channels: [], serverTime: new Date().toISOString() });
     socket.on('message', (raw: Buffer) => {
       conn.lastSeen = Date.now();
-      void this.handle(conn, raw.toString());
+      this.handle(conn, raw.toString()).catch((error: unknown) => {
+        // A rejection here would reach the process-level unhandledRejection
+        // handler and shut the whole panel down; contain it per client instead.
+        this.deps.logger?.warn({ err: error }, 'ws message handling failed');
+        this.send(conn, { type: 'error', code: 'INTERNAL', message: '消息处理失败' });
+      });
     });
     socket.on('close', () => this.cleanup(conn));
     socket.on('error', () => this.cleanup(conn));
@@ -178,7 +184,11 @@ export class WsHub {
       return;
     }
     if (conn.subscriptions.has(message.channel)) {
-      await this.sendInitial(conn, message.channel, message.sinceSeq);
+      // The instance may have been deleted since the first subscribe (deletion
+      // does not notify the hub); re-check so sendInitial cannot throw NOT_FOUND.
+      if (this.ensureInstanceExists(conn, message.channel)) {
+        await this.sendInitial(conn, message.channel, message.sinceSeq);
+      }
       return;
     }
     const parts = message.channel.split(':');
@@ -256,6 +266,18 @@ export class WsHub {
         this.send(conn, { type: 'metrics.sample', target: 'instance', instanceId, ts: latest.ts, sample: latest });
       }
     }
+  }
+
+  /** Only for channels with an active subscription: drops it when the instance is gone. */
+  private ensureInstanceExists(conn: ClientConn, channel: string): boolean {
+    const [kind, instanceId] = channel.split(':');
+    if (kind !== 'instance' || !instanceId) return true;
+    const exists = this.deps.db.select({ id: instances.id }).from(instances).where(eq(instances.id, instanceId)).get();
+    if (exists) return true;
+    conn.subscriptions.delete(channel);
+    this.releaseChannel(channel);
+    this.send(conn, { type: 'error', code: 'NOT_FOUND', message: '实例不存在' });
+    return false;
   }
 
   private releaseChannel(channel: string): void {

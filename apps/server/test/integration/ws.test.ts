@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { AddressInfo } from 'node:net';
+import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import type { ConsoleLine } from '@mcpanel/shared';
@@ -7,6 +8,7 @@ import { buildApp } from '../../src/app';
 import { SessionService } from '../../src/auth/session';
 import { LoginThrottle } from '../../src/auth/guard';
 import { loadConfig } from '../../src/config';
+import { instances } from '../../src/db/schema';
 import { silentLogger } from '../../src/logger';
 import { LocalNodeDriver } from '../../src/nodes/local-driver';
 import { PathSandbox } from '../../src/nodes/path-sandbox';
@@ -226,6 +228,30 @@ describe('WebSocket hub', () => {
 
     await expect(connect(url, { origin: httpOrigin })).rejects.toThrow(/Unexpected /);
     await expect(connect(url, { cookie: `mcpanel_session=${token}`, origin: 'http://evil.example' })).rejects.toThrow();
+  });
+
+  // Regression: instance deletion does not notify the hub, so a re-subscribe on
+  // a stale channel used to throw NOT_FOUND out of handle() and hit the
+  // process-level unhandledRejection fatal handler, shutting the panel down.
+  it('answers NOT_FOUND when re-subscribing to a deleted instance and keeps serving', async () => {
+    const { instance, token, url, httpOrigin } = await makeApp();
+    const socket = await connect(url, { cookie: `mcpanel_session=${token}`, origin: httpOrigin });
+    await socket.next();
+
+    const channel = `instance:${instance.id}:console`;
+    socket.send({ type: 'subscribe', channel });
+    expect(await socket.next()).toMatchObject({ type: 'console.snapshot', channel });
+
+    ctx!.db.delete(instances).where(eq(instances.id, instance.id)).run();
+
+    socket.send({ type: 'subscribe', channel });
+    expect(await socket.next()).toMatchObject({ type: 'error', code: 'NOT_FOUND' });
+
+    // The stale subscription is dropped; the connection itself stays usable.
+    socket.send({ type: 'subscribe', channel });
+    expect(await socket.next()).toMatchObject({ type: 'error', code: 'NOT_FOUND' });
+    socket.send({ type: 'ping' });
+    expect(await socket.next()).toMatchObject({ type: 'pong' });
   });
 
   it('activates metrics sampling while a metrics channel is subscribed', async () => {

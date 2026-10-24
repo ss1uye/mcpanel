@@ -144,6 +144,20 @@ describe('files API', () => {
     expect(json<{ error: { code: string } }>(escape).error.code).toBe('VALIDATION_ERROR');
   });
 
+  // Regression: the JSON body limit must sit above the 2 MB file-save schema,
+  // and exceeding it must surface as 413 FILE_TOO_LARGE, not a generic 400.
+  it('maps oversized JSON bodies to 413 FILE_TOO_LARGE', async () => {
+    const { app, instanceId, headers } = await makeApp();
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/instances/${instanceId}/files/content`,
+      headers,
+      payload: { path: '/big.txt', content: 'x'.repeat(3 * 1024 * 1024 + 1024) },
+    });
+    expect(response.statusCode).toBe(413);
+    expect(json<{ error: { code: string } }>(response).error.code).toBe('FILE_TOO_LARGE');
+  });
+
   it('creates, renames and deletes entries with a recursive guard', async () => {
     const { app, root, instanceId, headers } = await makeApp();
     const mkdir = await app.inject({

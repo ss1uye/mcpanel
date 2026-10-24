@@ -60,15 +60,13 @@ export async function extractZipSafe(
       });
       zip.on('entry', (entry: yauzl.Entry) => {
         entries += 1;
-        bytes += entry.uncompressedSize;
         if (entries > maxEntries) {
           fail(new AppError('ZIP_INVALID', '压缩包条目过多'));
           return;
         }
-        if (bytes > maxBytes) {
-          fail(new AppError('ZIP_INVALID', '解压后体积超过上限'));
-          return;
-        }
+        // bytes is only counted by the Transform below: the declared
+        // uncompressedSize in the central directory is untrusted, and adding it
+        // here double-counts against maxBytes (entries stream through both paths).
         if (unsafeEntry(entry.fileName)) {
           fail(new AppError('ZIP_INVALID', '压缩包包含越界路径'));
           return;

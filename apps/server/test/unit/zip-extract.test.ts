@@ -50,6 +50,17 @@ describe('extractZipSafe', () => {
     });
   });
 
+  // Regression: declared uncompressedSize must not count against maxBytes (it is
+  // also counted for real by the Transform), or archives abort at ~50% of the limit.
+  it('measures bytes actually decompressed, not the declared size twice', async () => {
+    const content = 'x'.repeat(300 * 1024);
+    const { archive, out } = await withZip({ 'big.bin': content });
+    const result = await extractZipSafe(archive, out, { maxBytes: 400 * 1024 });
+    expect(result.entries).toBe(1);
+    expect(result.bytes).toBe(content.length);
+    expect(await fs.readFile(path.join(out, 'big.bin'), 'utf8')).toHaveLength(content.length);
+  });
+
   it('uses resolveTarget for every entry', async () => {
     const { archive, out } = await withZip({ 'a.txt': 'a' });
     const seen: string[] = [];
