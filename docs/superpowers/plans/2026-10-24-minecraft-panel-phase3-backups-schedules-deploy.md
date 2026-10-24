@@ -4483,7 +4483,7 @@ git commit -m "docs: close out phase 3 with acceptance notes"
 | §12.3 创建流程（锁、磁盘检查、manifest、原子改名、进度） | Task 3、Task 5、Task 7 |
 | §12.4 保留策略（含 pre_restore 保护） | Task 5 |
 | §12.5 恢复流程（pre_restore、解压限制、rollback） | Task 6 |
-| §12.6 中断恢复与清理动作 | Task 5、Task 7、Task 12 |
+| §12.6 中断恢复与清理动作 | Task 5、Task 7、Task 12（审查后补：启动时 rollback 残留 → `unknown`） |
 | §13.1 计划动作 | Task 8 |
 | §13.2 cron、时区、重叠跳过、不补跑 | Task 8、Task 9 |
 | §13.3 运行记录（保留 100 条、手动触发） | Task 8、Task 11 |

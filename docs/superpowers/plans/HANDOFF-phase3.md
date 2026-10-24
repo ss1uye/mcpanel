@@ -1,13 +1,13 @@
 # 阶段 3 执行交接（进行中）
 
 > 目的：上下文压缩后凭本文档继续执行，无需重新探索。
-> 最后更新：后端 9 个任务全部完成后（`main` 分支，HEAD `ab63d55`）。
+> 最后更新：阶段 3 全部任务与代码审查修复完成后（`main` 分支，HEAD `f9f60e1`）。
 
 ## 基本事实
 
 - 计划：`docs/superpowers/plans/2026-10-24-minecraft-panel-phase3-backups-schedules-deploy.md`（15 个任务，含完整代码）
 - 分支：`main`；无 remote；阶段 2 收尾提交为 `37fd975`
-- 基线：`npm run typecheck` 0 错误；`npm test` = server 195 / web 37 / shared 11；`npm run lint` 干净
+- 基线：`npm run typecheck` 0 错误；`npm test` = server 206 / web 45 / shared 11；`npm run lint` 干净；`npm run build` 通过；`npm run test:e2e` 通过
 
 ## 任务进度
 
@@ -22,12 +22,12 @@
 | Task 7 备份路由 + 任务频道 + 残留清理 | ✅ | `0747272` |
 | Task 8 ScheduleService | ✅ | `a472f7d` |
 | Task 9 计划路由与调度器 | ✅ | `ab63d55` |
-| Task 10 备份页签前端 | ⏳ 下一个 | — |
-| Task 11 计划页签前端 | ⏳ | — |
-| Task 12 恢复残留警告与清理 | ⏳ | — |
-| Task 13 Playwright 冒烟 | ⏳ | — |
-| Task 14 部署脚本/改密/文档 | ⏳ | — |
-| Task 15 验收与收尾 | ⏳ | — |
+| Task 10 备份页签前端 | ✅ | `2a6a84e` |
+| Task 11 计划页签前端 | ✅ | `c5c311f` |
+| Task 12 恢复残留警告与清理 | ✅ | `6d89de6` |
+| Task 13 Playwright 冒烟 | ✅ | `46cd995` |
+| Task 14 部署脚本/改密/文档 | ✅ | `ba18839` |
+| Task 15 验收与收尾 | ✅ | `7e6a09a` + 审查修复 `f9f60e1` |
 
 ## 执行中的偏差（已落地，以代码为准）
 
@@ -42,6 +42,21 @@
 9. WS 任务频道：订阅不存在的任务返回 `NOT_FOUND`；测试里 `TestSocket.send` 接受对象（内部 JSON.stringify），不要重复 stringify，否则会得到 `VALIDATION_ERROR`。
 10. 计划服务测试比计划多两条：运行中命令成功、每次裁剪到 100 条运行记录。
 
-## 继续方式
+## 代码审查结果（已处理）
 
-从 Task 10（备份页签前端）开始按计划执行。后端接口已全部就绪：备份/恢复/任务 WS/计划 CRUD/立即运行/运行记录/恢复残留清理。若计划与已提交代码冲突，以代码为准并同步修正计划文本。
+独立审查复现了两个 Critical 并已修复（提交 `f9f60e1`）：
+
+1. **恢复可写出实例根目录**：构造 `sources: ["../victim"]` 的 manifest 可把文件移出根目录；`plugins` 为 junction 时可覆盖外部目录。修复：`validateManifest` 拒绝 `..`/反斜杠/绝对路径/`.mcpanel-tmp` 与非法 `totalBytes`；每个源路径与临时目录都经 `PathSandbox.resolve`；`.mcpanel-tmp` 组件被检查。新增 `restore-safety.test.ts`（5 例：穿越、反斜杠、junction、忙碌/残留、恢复中被启动）。
+2. **恢复期间可启动服务器**：备份/恢复改用 `InstanceSupervisor.runExclusive` 的实例锁，与启动/停止/重启共用；`preflight`/`startCreate` 用同步 `assertIdle` 返回 409；恢复在交换前再次检查 `stopped`；UI 在任务运行时禁用启停按钮。
+3. 其他修复：移动失败也回滚并记录失败路径；重试恢复不再删除非空 rollback；§12.6 启动恢复（非空 rollback → 实例 `unknown` + 错误，空目录清理）；pre_restore 不再提前结束恢复任务；删除实例先停计划任务再删行；空目录纳入归档并可恢复；`level-name`/额外路径经沙箱校验；zip 解压按实际字节计数；`.part`/失败备份可删除；`TaskTracker.cleanup` 定时执行；下载与定时运行/定时命令补审计；`reset-password` 读取 `.env`；计划支持独立时区输入与“上次运行”展示。
+
+## 已知遗留（可接受）
+
+- 备份 manifest 只做结构与路径校验，未与数据库存证做哈希比对（面板自己生成的备份可信；手工替换 zip 仍会被路径校验挡住）。
+- 运行中备份与“面板之外的进程终止”仍存在窄竞态（面板内的启停已被锁串行化）。
+- 备份下载未校验状态字段，失败记录下载会得到 404/500。
+- Playwright 只覆盖冷备份路径与 375px 概览页，计划/清理/失败恢复由集成测试覆盖。
+
+## 下一步
+
+第一版（阶段 1–3）交付完成。后续可选：远程节点 Agent、告警/通知、多用户与权限、面板自身数据库的在线备份脚本。
