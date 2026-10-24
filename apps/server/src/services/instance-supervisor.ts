@@ -50,7 +50,18 @@ const FAILURE_HINTS: { pattern: RegExp; message: string }[] = [
   { pattern: /Failed to load eula\.txt/i, message: 'eula.txt 未接受或格式错误' },
   { pattern: /Address already in use/i, message: '端口已被占用' },
   { pattern: /UnsupportedClassVersionError/i, message: 'Java 版本过低，请更换 Java' },
+  {
+    pattern: /Unsupported class file major version/i,
+    message: 'Java 版本与 Mixin 不兼容，请改用服务端要求的 Java 版本',
+  },
   { pattern: /Java heap space/i, message: 'Java 堆内存不足' },
+];
+const STARTUP_FATAL_HINTS = [
+  {
+    pattern: /Unsupported class file major version/i,
+    message: 'Java 版本与 Mixin 不兼容，请改用服务端要求的 Java 版本',
+  },
+  { pattern: /UnsupportedClassVersionError/i, message: 'Java 版本过低，请更换 Java' },
 ];
 
 export class InstanceSupervisor extends EventEmitter {
@@ -59,6 +70,7 @@ export class InstanceSupervisor extends EventEmitter {
   private readonly timers = new Map<string, NodeJS.Timeout[]>();
   private readonly locks = new Set<string>();
   private readonly commandTimes = new Map<string, number[]>();
+  private readonly aborting = new Set<string>();
   private closing = false;
 
   constructor(private readonly deps: SupervisorDeps) {
@@ -71,6 +83,11 @@ export class InstanceSupervisor extends EventEmitter {
       });
       this.emit('console', event.instanceId, [line]);
       if (this.runtime.get(event.instanceId)?.state === 'starting') {
+        const fatal = STARTUP_FATAL_HINTS.find((item) => item.pattern.test(event.text));
+        if (fatal) {
+          this.abortStartup(event.instanceId, fatal.message);
+          return;
+        }
         if (STARTUP_PATTERNS.some((pattern) => pattern.test(event.text))) this.markRunning(event.instanceId);
       }
     });
@@ -224,6 +241,7 @@ export class InstanceSupervisor extends EventEmitter {
       throw new AppError('INVALID_STATE', `当前状态 ${runtime.state} 不能启动`);
     }
     await this.validateStart(row);
+    this.aborting.delete(instanceId);
     this.move(instanceId, 'start_requested', { pid: null, startedAt: Date.now(), exitCode: null, error: null });
     try {
       const snapshot = await this.deps.driver.startProcess({
@@ -231,6 +249,7 @@ export class InstanceSupervisor extends EventEmitter {
         rootPath: row.rootPath,
         startCommand: row.startCommand,
         logEncoding: row.logEncoding as LogEncoding,
+        javaPath: row.javaPath,
       });
       this.updateState(instanceId, this.requireRuntime(instanceId).state, {
         pid: snapshot.pid,
@@ -311,8 +330,13 @@ export class InstanceSupervisor extends EventEmitter {
 
   private handleExit(instanceId: string, code: number | null): void {
     const runtime = this.runtime.get(instanceId);
+    this.aborting.delete(instanceId);
     if (!runtime || this.closing) return;
     this.clearTimers(instanceId);
+    if (runtime.state === 'crashed') {
+      this.updateState(instanceId, 'crashed', { pid: null });
+      return;
+    }
     if (runtime.state === 'stopping') {
       this.updateState(instanceId, 'stopped', { exitCode: code, pid: null });
       return;
@@ -338,6 +362,17 @@ export class InstanceSupervisor extends EventEmitter {
       return;
     }
     this.updateState(instanceId, 'stopped', { exitCode: code, pid: null });
+  }
+
+  /** Launchers such as run.bat `pause` keep the wrapper alive after Java dies. */
+  private abortStartup(instanceId: string, message: string): void {
+    if (this.aborting.has(instanceId)) return;
+    if (this.runtime.get(instanceId)?.state !== 'starting') return;
+    this.aborting.add(instanceId);
+    this.deps.logger.warn({ instanceId, message }, 'fatal startup output detected; killing process tree');
+    void this.deps.driver.killProcessTree(instanceId).catch((error: unknown) => {
+      this.deps.logger.warn({ err: error, instanceId }, 'failed to kill after fatal startup output');
+    });
   }
 
   private scheduleStartupChecks(row: InstanceRow): void {

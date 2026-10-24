@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildShellCommand, processMatchesRoot } from '../../src/nodes/process-tree';
+import { buildServerEnv, buildShellCommand, processMatchesRoot } from '../../src/nodes/process-tree';
 
 describe('buildShellCommand', () => {
   it('keeps the instance root inside the Windows command line for PID verification', () => {
@@ -35,6 +35,25 @@ describe('buildShellCommand', () => {
     expect(buildShellCommand('/srv/survival', 'sh start.sh', 'linux').args[1]).toBe(
       `cd -- '/srv/survival' && sh start.sh`,
     );
+  });
+});
+
+describe('buildServerEnv', () => {
+  const javaPath = path.resolve('jdks', 'jdk-17', 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
+  const binDir = path.dirname(javaPath);
+
+  it('prepends the configured Java bin directory and sets JAVA_HOME', () => {
+    const env = buildServerEnv(javaPath, { Path: '/base/path', JAVA_HOME: '/old' });
+    expect(env.Path).toBe(`${binDir}${path.delimiter}/base/path`);
+    expect(env.JAVA_HOME).toBe(path.dirname(binDir));
+    expect(Object.keys(env).filter((key) => key.toLowerCase() === 'path')).toHaveLength(1);
+    expect(Object.keys(env).filter((key) => key.toLowerCase() === 'java_home')).toHaveLength(1);
+  });
+
+  it('ignores a relative java path and keeps the base environment', () => {
+    const env = buildServerEnv('java', { Path: '/base/path' });
+    expect(env.Path).toBe('/base/path');
+    expect(env.JAVA_HOME).toBeUndefined();
   });
 });
 

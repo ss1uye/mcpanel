@@ -79,7 +79,7 @@ export class LocalNodeDriver extends EventEmitter implements NodeDriver {
 
   async startProcess(spec: StartSpec): Promise<ProcessSnapshot> {
     if (this.processes.has(spec.instanceId)) throw new AppError('OPERATION_IN_PROGRESS', '进程已在运行');
-    const child = spawnServer(spec.rootPath, spec.startCommand);
+    const child = spawnServer(spec.rootPath, spec.startCommand, spec.javaPath);
     await new Promise<void>((resolve, reject) => {
       child.once('spawn', resolve);
       child.once('error', () => reject(new AppError('INTERNAL', `无法启动进程：${spec.startCommand}`)));

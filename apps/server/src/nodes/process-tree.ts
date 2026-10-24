@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import path from 'node:path';
 import { AppError } from '../utils/errors';
 
 export function buildShellCommand(
@@ -27,10 +28,29 @@ export function buildShellCommand(
   return { file: '/bin/sh', args: ['-c', `cd -- ${quoted} && ${normalized}`], verbatim: false };
 }
 
-export function spawnServer(rootPath: string, startCommand: string): ChildProcess {
+export function buildServerEnv(
+  javaPath: string | null | undefined,
+  base: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base };
+  if (!javaPath || !path.isAbsolute(javaPath)) return env;
+  const binDir = path.dirname(javaPath);
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
+  env[pathKey] = env[pathKey] ? `${binDir}${path.delimiter}${env[pathKey]}` : binDir;
+  const homeKey = Object.keys(env).find((key) => key.toLowerCase() === 'java_home') ?? 'JAVA_HOME';
+  env[homeKey] = path.basename(binDir).toLowerCase() === 'bin' ? path.dirname(binDir) : binDir;
+  return env;
+}
+
+export function spawnServer(
+  rootPath: string,
+  startCommand: string,
+  javaPath?: string | null,
+): ChildProcess {
   const { file, args, verbatim } = buildShellCommand(rootPath, startCommand);
   return spawn(file, args, {
     cwd: rootPath,
+    env: buildServerEnv(javaPath),
     windowsHide: true,
     detached: process.platform !== 'win32',
     windowsVerbatimArguments: verbatim,

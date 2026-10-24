@@ -11,6 +11,7 @@ const log = (line) => {
 };
 
 const crash = process.argv.includes('--crash');
+const fatal = process.argv.includes('--fatal');
 const exitAfter = Number(process.argv.find((arg) => arg.startsWith('--exit-after='))?.split('=')[1] ?? 0);
 
 log('[Server thread/INFO]: Starting minecraft server version 1.21.1');
@@ -20,7 +21,16 @@ if (process.argv.includes('--gbk')) {
   process.stdout.write(iconv.encode('[Server thread/INFO]: 中文日志测试\n', 'gbk'));
 }
 
-setTimeout(() => log('[Server thread/INFO]: Done (2.1s)! For help, type "help"'), 200);
+if (fatal) {
+  // Mirrors a Forge/Mixin crash under an incompatible Java, while the wrapper
+  // (e.g. run.bat with `pause`) stays alive.
+  setTimeout(
+    () => log('[main/FATAL] [mixin/]: Mixin prepare failed: Unsupported class file major version 70'),
+    300,
+  );
+} else {
+  setTimeout(() => log('[Server thread/INFO]: Done (2.1s)! For help, type "help"'), 200);
+}
 
 if (crash) {
   setTimeout(() => {

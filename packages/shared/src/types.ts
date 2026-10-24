@@ -129,6 +129,7 @@ export interface StartSpec {
   rootPath: string;
   startCommand: string;
   logEncoding: LogEncoding;
+  javaPath?: string | null;
 }
 
 export interface ProcessSnapshot {

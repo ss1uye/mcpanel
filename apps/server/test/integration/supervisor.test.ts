@@ -114,6 +114,22 @@ describe('InstanceSupervisor', () => {
     expect(stored?.lastPid).toBeNull();
   }, 40000);
 
+  it('kills a launcher left alive after a fatal Java/Mixin startup error', async () => {
+    const { instance, supervisor: service } = await prepare('坏 Java');
+    ctx!.db
+      .update(instances)
+      .set({ startCommand: `"${process.execPath}" "${fixture}" --root "${root}" --fatal` })
+      .where(eq(instances.id, instance.id))
+      .run();
+
+    const started = await service.start(instance.id);
+    expect(started.state).toBe('starting');
+    await waitFor(() => service.getStatus(instance.id).state === 'crashed', 30000);
+    const status = service.getStatus(instance.id);
+    expect(status.error).toContain('Java 版本');
+    expect(status.pid).toBeNull();
+  }, 40000);
+
   it('starts an instance onboarded after init() without a panel restart', async () => {
     await prepare('首个实例');
     const service = supervisor!;

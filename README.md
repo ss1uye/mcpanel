@@ -152,6 +152,13 @@ npm run test:e2e     # Playwright 冒烟（Chromium，需先 npx playwright inst
 3. 更新代码后执行 `npm ci && npm run build`；
 4. 重新启动，数据库迁移会自动执行。
 
+## 启动失败排查
+
+- 面板一直显示「启动中」但控制台已有 `[main/FATAL]`：先看实例的 `logs/latest.log`。Forge 1.20.1 需要 Java 17；出现 `Unsupported class file major version` 通常说明启动用的 Java 太新。
+- 「Java 路径」填写绝对路径后，面板会把它所在目录放到启动环境的 `PATH` 前面，并设置 `JAVA_HOME`，`run.bat` / `run.sh` 里的 `java` 会优先使用它。
+- 启动阶段出现 `Unsupported class file major version` 或 `UnsupportedClassVersionError` 时，面板会结束残留的启动器进程并标记为 `crashed`，不会一直卡在「启动中」。
+- 服务器启动脚本末尾不要保留 `pause`；否则 Java 崩溃后包裹进程仍存活，面板无法通过进程退出来判断崩溃。
+
 ## 忘记密码
 
 已登录时可在「设置 → 修改密码」中修改，修改后其他会话会被踢出。若已经无法登录，停止面板后执行：

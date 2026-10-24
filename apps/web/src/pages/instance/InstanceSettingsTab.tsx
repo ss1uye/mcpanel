@@ -110,7 +110,7 @@ export function InstanceSettingsTab() {
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Java 路径" hint="留空使用 PATH 中的 java">
+          <Field label="Java 路径" hint="建议填绝对路径；启动时会优先使用该 Java（写入 PATH 与 JAVA_HOME），留空使用 PATH 中的 java">
             <Input value={form.javaPath} onChange={(event) => setForm({ ...form, javaPath: event.target.value })} />
           </Field>
           <Field label="RCON 主机" hint="留空从 server.properties 推导">
