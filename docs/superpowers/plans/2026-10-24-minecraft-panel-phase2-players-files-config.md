@@ -1648,22 +1648,27 @@ export function patchProperties(raw: string, changes: Record<string, string>): s
   const lines = raw.split(/\r?\n/);
   if (hadTrailingNewline) lines.pop();
 
-  const remaining = new Map(Object.entries(changes));
+  const updates = new Map(Object.entries(changes));
+  const seen = new Set<string>();
   const next = lines.map((line) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('!')) return line;
     const separator = trimmed.indexOf('=');
     if (separator < 0) return line;
     const key = trimmed.slice(0, separator).trim();
-    if (!remaining.has(key)) return line;
-    const value = remaining.get(key) ?? '';
-    remaining.delete(key);
-    return `${key}=${value}`;
+    if (!updates.has(key)) return line;
+    seen.add(key);
+    return `${key}=${updates.get(key) ?? ''}`;
   });
 
-  for (const [key, value] of remaining) next.push(`${key}=${value}`);
+  let appended = false;
+  for (const [key, value] of updates) {
+    if (seen.has(key)) continue;
+    next.push(`${key}=${value}`);
+    appended = true;
+  }
   const body = next.join(eol);
-  return hadTrailingNewline || remaining.size > 0 ? `${body}${eol}` : body;
+  return hadTrailingNewline || appended ? `${body}${eol}` : body;
 }
 
 export function patchEula(raw: string | null): string {

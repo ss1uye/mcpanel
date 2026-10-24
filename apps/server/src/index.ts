@@ -55,7 +55,7 @@ if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
 const app = await buildApp(
   config,
   handle.db,
-  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files },
+  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox },
   { logger, serveStatic },
 );
 

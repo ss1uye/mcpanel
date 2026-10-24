@@ -16,10 +16,12 @@ import type { DB } from './db/client';
 import { silentLogger } from './logger';
 import { registerAuditRoutes } from './routes/audit';
 import { registerAuthRoutes } from './routes/auth';
+import { registerConfigRoutes } from './routes/config';
 import { registerFileRoutes } from './routes/files';
 import { registerInstanceRoutes } from './routes/instances';
 import { registerSystemRoutes } from './routes/system';
 import type { LocalNodeDriver } from './nodes/local-driver';
+import type { PathSandbox } from './nodes/path-sandbox';
 import type { AuditService } from './services/audit-service';
 import type { FileService } from './services/file-service';
 import type { InstanceService } from './services/instance-service';
@@ -41,6 +43,7 @@ export interface AppServices {
   probe?: ProbeService;
   metrics?: MetricsService;
   files?: FileService;
+  sandbox?: PathSandbox;
 }
 
 export interface BuildAppOptions {
@@ -183,6 +186,16 @@ export async function buildApp(
       instances: services.instances,
       files: services.files,
       config,
+    });
+  }
+
+  if (services.instances && services.rcon && services.sandbox) {
+    registerConfigRoutes(app, {
+      sessions: services.sessions,
+      audit: services.audit,
+      instances: services.instances,
+      rcon: services.rcon,
+      sandbox: services.sandbox,
     });
   }
 
