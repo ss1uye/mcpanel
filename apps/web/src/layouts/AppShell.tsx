@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutDashboard, LogOut, Menu, Moon, ScrollText, Server, Settings, Sun } from 'lucide-react';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { PANEL_VERSION, type PanelSettings } from '@mcpanel/shared';
 import { api, clearCsrfToken } from '../api/client';
 import { disconnectRealtime, useConnectionState, useRealtime } from '../stores/realtime';
 import { useUi } from '../stores/ui';
-import { Badge, Button, Toaster } from '../components/ui';
+import { Badge, Button, Spinner, Toaster } from '../components/ui';
 import { cn } from '../utils/cn';
 
 function ConnectionIndicator() {
@@ -128,7 +128,15 @@ export function AppShell() {
           </button>
         </header>
         <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-8">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="p-8">
+                <Spinner />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <Toaster />

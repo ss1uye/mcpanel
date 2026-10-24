@@ -1,25 +1,50 @@
 import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import type { AuthStatus } from '@mcpanel/shared';
 import { api } from './api/client';
 import { Spinner } from './components/ui';
 import { AppShell } from './layouts/AppShell';
 import { InstanceLayout } from './layouts/InstanceLayout';
-import { AuditPage } from './pages/AuditPage';
-import { BackupsTab } from './pages/instance/BackupsTab';
-import { SchedulesTab } from './pages/instance/SchedulesTab';
-import { DashboardPage } from './pages/DashboardPage';
-import { InstancesPage } from './pages/InstancesPage';
-import { LoginPage } from './pages/LoginPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { SetupPage } from './pages/SetupPage';
-import { ConfigTab } from './pages/instance/ConfigTab';
-import { ConsoleTab } from './pages/instance/ConsoleTab';
-import { FilesTab } from './pages/instance/FilesTab';
-import { InstanceSettingsTab } from './pages/instance/InstanceSettingsTab';
-import { OverviewTab } from './pages/instance/OverviewTab';
-import { PlayersTab } from './pages/instance/PlayersTab';
+
+const SetupPage = lazy(() => import('./pages/SetupPage').then((module) => ({ default: module.SetupPage })));
+const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })));
+const DashboardPage = lazy(() =>
+  import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })),
+);
+const InstancesPage = lazy(() =>
+  import('./pages/InstancesPage').then((module) => ({ default: module.InstancesPage })),
+);
+const AuditPage = lazy(() => import('./pages/AuditPage').then((module) => ({ default: module.AuditPage })));
+const SettingsPage = lazy(() =>
+  import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })),
+);
+const OverviewTab = lazy(() =>
+  import('./pages/instance/OverviewTab').then((module) => ({ default: module.OverviewTab })),
+);
+const ConsoleTab = lazy(() =>
+  import('./pages/instance/ConsoleTab').then((module) => ({ default: module.ConsoleTab })),
+);
+const PlayersTab = lazy(() =>
+  import('./pages/instance/PlayersTab').then((module) => ({ default: module.PlayersTab })),
+);
+const FilesTab = lazy(() => import('./pages/instance/FilesTab').then((module) => ({ default: module.FilesTab })));
+const ConfigTab = lazy(() => import('./pages/instance/ConfigTab').then((module) => ({ default: module.ConfigTab })));
+const BackupsTab = lazy(() =>
+  import('./pages/instance/BackupsTab').then((module) => ({ default: module.BackupsTab })),
+);
+const SchedulesTab = lazy(() =>
+  import('./pages/instance/SchedulesTab').then((module) => ({ default: module.SchedulesTab })),
+);
+const InstanceSettingsTab = lazy(() =>
+  import('./pages/instance/InstanceSettingsTab').then((module) => ({ default: module.InstanceSettingsTab })),
+);
+
+const pageFallback = (
+  <div className="grid min-h-screen place-items-center">
+    <Spinner />
+  </div>
+);
 
 function AuthGate({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -46,8 +71,22 @@ function AuthGate({ children }: { children: ReactNode }) {
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/setup" element={<SetupPage />} />
-      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/setup"
+        element={
+          <Suspense fallback={pageFallback}>
+            <SetupPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/login"
+        element={
+          <Suspense fallback={pageFallback}>
+            <LoginPage />
+          </Suspense>
+        }
+      />
       <Route
         path="/"
         element={
