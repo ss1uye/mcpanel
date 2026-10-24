@@ -22,6 +22,20 @@ describe('buildShellCommand', () => {
     expect(command.verbatim).toBe(false);
     expect(command.args[1]).toBe(`cd -- '/srv/it'\\''s here' && ./run.sh`);
   });
+
+  it('resolves a bare POSIX shell script from the instance root', () => {
+    const command = buildShellCommand('/srv/survival', 'start.sh --nogui', 'linux');
+    expect(command.args[1]).toBe(`cd -- '/srv/survival' && ./start.sh --nogui`);
+  });
+
+  it('leaves qualified paths and explicit interpreters unchanged', () => {
+    expect(buildShellCommand('/srv/survival', './start.sh', 'linux').args[1]).toBe(
+      `cd -- '/srv/survival' && ./start.sh`,
+    );
+    expect(buildShellCommand('/srv/survival', 'sh start.sh', 'linux').args[1]).toBe(
+      `cd -- '/srv/survival' && sh start.sh`,
+    );
+  });
 });
 
 describe('processMatchesRoot', () => {

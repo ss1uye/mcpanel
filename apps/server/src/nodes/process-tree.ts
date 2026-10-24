@@ -19,7 +19,12 @@ export function buildShellCommand(
     };
   }
   const quoted = `'${rootPath.replaceAll("'", `'\\''`)}'`;
-  return { file: '/bin/sh', args: ['-c', `cd -- ${quoted} && ${startCommand}`], verbatim: false };
+  // POSIX shells resolve a bare name through PATH, not the cwd; scripts detected
+  // as `start.sh` would otherwise fail with "command not found".
+  const trimmed = startCommand.trim();
+  const first = trimmed.split(/\s+/, 1)[0] ?? '';
+  const normalized = /^[A-Za-z0-9._-]+\.sh$/i.test(first) ? `./${trimmed}` : trimmed;
+  return { file: '/bin/sh', args: ['-c', `cd -- ${quoted} && ${normalized}`], verbatim: false };
 }
 
 export function spawnServer(rootPath: string, startCommand: string): ChildProcess {
