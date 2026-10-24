@@ -20,7 +20,7 @@ npm run build && npm start        # 生产：http://127.0.0.1:3000
 
 ```bash
 npm run typecheck      # 0 错误
-npm test               # server 219 / web 52 / shared 12
+npm test               # server 221 / web 52 / shared 12
 npm run lint
 npm run build
 npm run test:e2e       # Playwright Chromium，约 10s
@@ -81,6 +81,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - **备份一致性**：运行中备份必须 RCON 可用：`save-off` → `save-all flush` → 等 `logs/latest.log` 出现 `Saved the game|Saved the world`（60s）→ 打包 → `finally save-on`；否则拒绝（`BACKUP_REQUIRES_STOP_OR_RCON`）。
 - **恢复**：仅 `stopped`；先做 `pre_restore` 冷备份；解压到实例内 `.mcpanel-tmp/restore-*`，把现存源移到 `rollback-*` 再交换；失败回滚移动与新建路径；非空 `rollback-*` 阻止再次恢复，启动时把实例置为 `unknown`，概览页可确认清理。
 - **锁**：`InstanceSupervisor.runExclusive` 同时串行化启动/停止/重启/强杀/备份/恢复；路由用同步 `assertIdle` 返回 409 `BACKUP_BUSY`。
+- **启动命令**：POSIX 下驱动会把裸 `start.sh` / `run.sh` 补成 `./…` 再交给 `/bin/sh`，避免 PATH 不含当前目录导致 `command not found`。
 - **计划任务**：croner、独立时区、重叠跳过、不补跑、每计划保留 100 条运行记录；删除实例前先 `forgetInstance`；列表/创建/更新返回 `nextRuns`（3 条），`GET /api/instances/:id/schedules/preview` 供表单预览。
 - **CSP**：每请求 nonce；`style-src 'self' 'nonce-…'`；`connect-src 'self' ws://<Host> wss://<Host>`；`TRUST_PROXY=true` 时优先 `X-Forwarded-Host`。HTML 模板 `apps/web/index.html` 的 `__CSP_NONCE__` 由服务端按请求替换（`no-store`）；CodeMirror 用 `EditorView.cspNonce`，Radix 动态样式通过 `window.__webpack_nonce__`。
 - **面板库快照**：`PanelBackupService` 使用 better-sqlite3 `backup()` 写入 `data/tmp/panel-*.db`，下载流关闭后删除；CLI 为 `scripts/backup-panel-db.mjs`；审计动作 `panel.backup`。

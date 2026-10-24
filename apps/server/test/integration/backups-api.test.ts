@@ -199,10 +199,15 @@ describe('backups API', () => {
     });
     expect(restored.statusCode).toBe(202);
 
+    const levelFile = path.join(root, 'world', 'level.dat');
+    let content: string | null = null;
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      if ((await fs.readFile(path.join(root, 'world', 'level.dat'), 'utf8')) === 'v1') break;
+      // The swap moves the old world out before moving the restored one in, so a
+      // poll can legitimately observe ENOENT for a moment.
+      content = await fs.readFile(levelFile, 'utf8').catch(() => null);
+      if (content === 'v1') break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    expect(await fs.readFile(path.join(root, 'world', 'level.dat'), 'utf8')).toBe('v1');
+    expect(content).toBe('v1');
   });
 });
