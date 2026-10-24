@@ -6,6 +6,7 @@ import { api } from './api/client';
 import { Spinner } from './components/ui';
 import { AppShell } from './layouts/AppShell';
 import { InstanceLayout } from './layouts/InstanceLayout';
+import { AuditPage } from './pages/AuditPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InstancesPage } from './pages/InstancesPage';
 import { LoginPage } from './pages/LoginPage';
@@ -54,6 +55,7 @@ export function AppRouter() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="instances" element={<InstancesPage />} />
+        <Route path="audit" element={<AuditPage />} />
         <Route path="instances/:id" element={<InstanceLayout />}>
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<OverviewTab />} />

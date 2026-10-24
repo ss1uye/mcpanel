@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { LayoutDashboard, LogOut, Menu, Moon, Server, Sun } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, Moon, ScrollText, Server, Sun } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { PANEL_VERSION } from '@mcpanel/shared';
@@ -24,6 +24,7 @@ function ConnectionIndicator() {
 const navigation = [
   { to: '/', label: '总览', icon: LayoutDashboard, end: true },
   { to: '/instances', label: '实例', icon: Server, end: false },
+  { to: '/audit', label: '审计', icon: ScrollText, end: true },
 ];
 
 export function AppShell() {
