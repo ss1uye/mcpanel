@@ -2,6 +2,11 @@ import { test, expect } from '@playwright/test';
 import { ADMIN_PASSWORD, INSTANCE_ROOT } from './helpers';
 
 test('init, onboard, run, back up and restore', async ({ page }) => {
+  const cspViolations: string[] = [];
+  page.on('console', (message) => {
+    if (message.text().includes('Content Security Policy')) cspViolations.push(message.text());
+  });
+
   await page.goto('/setup');
   await page.getByLabel('密码', { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByLabel('确认密码').fill(ADMIN_PASSWORD);
@@ -39,6 +44,26 @@ test('init, onboard, run, back up and restore', async ({ page }) => {
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'instance' })).toBeVisible();
+
+  await page.getByRole('link', { name: '配置', exact: true }).click();
+  await page.getByRole('button', { name: '原始编辑' }).click();
+  const editor = page.getByLabel('server.properties 内容');
+  await expect(editor).toBeVisible({ timeout: 15_000 });
+  await editor.click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.insertText(
+    'level-name=world\nserver-port=25620\nenable-rcon=false\nonline-mode=true\nmotd=e2e-edited\n',
+  );
+  await page.getByRole('button', { name: '保存配置' }).click();
+  await expect(page.getByText('配置已保存，重启服务器后生效')).toBeVisible({ timeout: 15_000 });
+
+  await page.goto('/settings');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: '下载面板数据库快照' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^panel-.*\.db$/);
+
+  expect(cspViolations).toEqual([]);
 
   await page.setViewportSize({ width: 375, height: 800 });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
