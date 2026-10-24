@@ -4,7 +4,7 @@
 
 自托管的 Minecraft Java 模组服管理面板。第一版面向单管理员、单机节点，纳管已经安装好的 Fabric / Forge / NeoForge 服务器目录，不接管安装流程。
 
-## 当前阶段（第一版完成）
+## 当前阶段（v0.2）
 
 - 首次初始化、登录、会话与 CSRF 防护
 - 纳管已有服务器目录（自动探测启动脚本、Java、server.properties、EULA、RCON 端口）
@@ -21,8 +21,13 @@
 - 定时任务：备份 / 启停 / 重启 / 命令 / 广播，cron + 时区、重叠跳过、运行记录
 - 部署：Windows `scripts/start-panel.bat`、Linux systemd（`docs/systemd.md`）、`scripts/reset-password.mjs`
 - 路径沙箱、审计日志与玩家动作固定命令模板
+- 编辑器：文件与配置原始编辑使用 CodeMirror 6（行号、搜索、JSON / YAML / properties 高亮）
+- 安全：CSP 使用每请求 nonce，WebSocket 仅允许当前 Host；反向代理需转发原始 Host 或 `X-Forwarded-Host`
+- 面板数据：设置页一键下载 SQLite 在线快照，或使用 `scripts/backup-panel-db.mjs`
+- 计划：列表与表单展示未来 3 次运行时间
+- 前端：路由级懒加载，图表与编辑器均按需加载
 
-第一版即阶段 1–3 的全部范围；玩家、文件、配置、备份与计划均在同一个面板内闭环。
+v0.2 在阶段 1–3 的基础上补齐了编辑体验、CSP、面板库备份与前端分包；玩家、文件、配置、备份与计划仍在同一个面板内闭环。
 
 ## 环境要求
 
@@ -99,6 +104,8 @@ data/
 - 玩家操作只使用固定命令模板（`kick <player> <reason>` 等），玩家名与原因在服务端再次校验，不接受任意命令。
 - 不要把 `data/` 放在实例目录内，也不要让实例目录互相嵌套。
 - 会话凭据与 RCON 密码只保存在内存中，不写入数据库，审计详情会脱敏。
+- CSP 为每请求 nonce：`style-src` 不含 `'unsafe-inline'`，`connect-src` 只允许同源 WebSocket。放在反向代理后时请转发原始 `Host`（Nginx 默认 `proxy_set_header Host $host;`）；若使用 `TRUST_PROXY=true`，也可通过 `X-Forwarded-Host` 传递。
+- 面板数据库快照包含密码哈希、会话哈希和审计记录，请按敏感文件保管。
 - 直接关闭面板不会停止 Minecraft 服务器；服务器在面板重启后会被识别为 `orphaned` 或 `unknown` 并给出处理入口。
 - 需要 HTTPS 请放在反向代理之后，并设置 `COOKIE_SECURE=true`。
 
@@ -110,6 +117,18 @@ data/
 - 服务器运行中备份要求 RCON 可用：面板先关闭自动保存、刷盘并等待日志确认，再打包，结束后恢复保存。
 - 恢复需要先停止服务器；恢复前会自动创建一份 `恢复前` 备份，失败时回滚已移动的目录。
 - 保留策略按实例的「保留数量」，但最新一份 `恢复前` 备份始终保留。
+
+## 面板数据库备份
+
+「设置 → 面板数据备份」可下载 `panel-*.db` 在线快照（含账号、会话、审计与设置，不含 `.env` 与 `secret.key`）。
+面板运行中也可执行：
+
+```bash
+node scripts/backup-panel-db.mjs [输出路径]
+# 默认写入 data/backups-panel/panel-<时间戳>.db
+```
+
+恢复：停止面板，将快照复制为 `data/panel.db`（同时删除同目录的 `panel.db-wal` / `panel.db-shm`），再启动面板。
 
 ## 定时任务
 
@@ -129,7 +148,7 @@ npm run test:e2e     # Playwright 冒烟（Chromium，需先 npx playwright inst
 ## 升级
 
 1. 停止面板（不会停止 Minecraft）；
-2. 备份 `data/panel.db` 与 `data/backups/`；
+2. 用设置页或 `scripts/backup-panel-db.mjs` 生成面板数据库快照，并备份 `data/backups/`；
 3. 更新代码后执行 `npm ci && npm run build`；
 4. 重新启动，数据库迁移会自动执行。
 

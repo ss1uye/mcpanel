@@ -1,11 +1,11 @@
 # MC Panel 交接文档
 
-> 最后更新：2026-10-24 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（私有）· 工作树干净
+> 最后更新：2026-10-24 · 版本 v0.2.0 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树干净
 > 用途：上下文压缩或换人接手后，凭本文档即可继续，无需重新探索。
 
 ## 1. 一句话状态
 
-自托管 Minecraft Java 模组服管理面板（v0.1，单管理员/单机）**阶段 1–3 全部完成**，已通过独立代码审查并修复全部 Critical/Important 问题；测试、类型、Lint、构建、Playwright 冒烟全绿。当前在本地开发环境运行，管理员已初始化，尚未纳管任何实例。
+自托管 Minecraft Java 模组服管理面板（v0.2，单管理员/单机）：阶段 1–3 与 v0.2 打磨（CSP nonce、面板库快照、下载校验、计划预览、CodeMirror、路由分包）全部完成。测试、类型、Lint、构建、Playwright 冒烟全绿；CI 双平台通过。当前在本地开发环境运行，管理员已初始化，尚未纳管任何实例。
 
 ## 2. 恢复工作（三步）
 
@@ -20,7 +20,7 @@ npm run build && npm start        # 生产：http://127.0.0.1:3000
 
 ```bash
 npm run typecheck      # 0 错误
-npm test               # server 206 / web 45 / shared 11
+npm test               # server 212 / web 49 / shared 12
 npm run lint
 npm run build
 npm run test:e2e       # Playwright Chromium，约 10s
@@ -41,11 +41,14 @@ npm run test:e2e       # Playwright Chromium，约 10s
 | 文档 | 内容 |
 | --- | --- |
 | `docs/superpowers/specs/2026-10-23-minecraft-server-panel-design.md` | 完整技术规格（唯一需求事实来源） |
+| `docs/superpowers/specs/2026-10-24-mcpanel-v0.2-design.md` | v0.2 打磨与加固设计 |
 | `docs/superpowers/plans/2026-10-24-minecraft-panel-phase2-players-files-config.md` | 阶段 2 计划（玩家/文件/配置） |
 | `docs/superpowers/plans/2026-10-24-minecraft-panel-phase3-backups-schedules-deploy.md` | 阶段 3 计划（备份/计划/部署/e2e） |
+| `docs/superpowers/plans/2026-10-24-mcpanel-v0.2-polish.md` | v0.2 实现计划 |
 | `docs/superpowers/plans/HANDOFF-phase1.md` | 阶段 1 收尾、接口约定、偏差 1–10 |
 | `docs/superpowers/plans/HANDOFF-phase2.md` | 阶段 2 收尾与手工验收 |
 | `docs/superpowers/plans/HANDOFF-phase3.md` | 阶段 3 收尾、审查结论、遗留风险 |
+| `docs/superpowers/plans/HANDOFF-phase4.md` | v0.2 收尾、决策与验证记录 |
 | `README.md` | 安装/开发/生产/备份与恢复/定时任务/安全/升级/忘记密码 |
 | `docs/systemd.md` | Linux 部署 |
 
@@ -78,8 +81,10 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - **备份一致性**：运行中备份必须 RCON 可用：`save-off` → `save-all flush` → 等 `logs/latest.log` 出现 `Saved the game|Saved the world`（60s）→ 打包 → `finally save-on`；否则拒绝（`BACKUP_REQUIRES_STOP_OR_RCON`）。
 - **恢复**：仅 `stopped`；先做 `pre_restore` 冷备份；解压到实例内 `.mcpanel-tmp/restore-*`，把现存源移到 `rollback-*` 再交换；失败回滚移动与新建路径；非空 `rollback-*` 阻止再次恢复，启动时把实例置为 `unknown`，概览页可确认清理。
 - **锁**：`InstanceSupervisor.runExclusive` 同时串行化启动/停止/重启/强杀/备份/恢复；路由用同步 `assertIdle` 返回 409 `BACKUP_BUSY`。
-- **计划任务**：croner、独立时区、重叠跳过、不补跑、每计划保留 100 条运行记录；删除实例前先 `forgetInstance`。
-- **审计动作**：`auth.*`、`instance.*`、`file.*`、`config.update`、`console.command`、`player.*`、`backup.create/delete/download/restore/restore_failed`、`schedule.*`、`settings.update`。
+- **计划任务**：croner、独立时区、重叠跳过、不补跑、每计划保留 100 条运行记录；删除实例前先 `forgetInstance`；列表/创建/更新返回 `nextRuns`（3 条），`GET /api/instances/:id/schedules/preview` 供表单预览。
+- **CSP**：每请求 nonce；`style-src 'self' 'nonce-…'`；`connect-src 'self' ws://<Host> wss://<Host>`；`TRUST_PROXY=true` 时优先 `X-Forwarded-Host`。HTML 模板 `apps/web/index.html` 的 `__CSP_NONCE__` 由服务端按请求替换（`no-store`）；CodeMirror 用 `EditorView.cspNonce`，Radix 动态样式通过 `window.__webpack_nonce__`。
+- **面板库快照**：`PanelBackupService` 使用 better-sqlite3 `backup()` 写入 `data/tmp/panel-*.db`，下载流关闭后删除；CLI 为 `scripts/backup-panel-db.mjs`；审计动作 `panel.backup`。
+- **审计动作**：`auth.*`、`instance.*`、`file.*`、`config.update`、`console.command`、`player.*`、`backup.create/delete/download/restore/restore_failed`、`schedule.*`、`settings.update`、`panel.backup`。
 - **WS**：`/api/ws` 同源 + 会话 Cookie；频道 `instance:<id>:{console,status,metrics,players}`、`system:metrics`、`task:<taskId>`；`players` 频道仍返回 403（玩家页走 REST 轮询）。
 - **配置**：`NODE_ENV` 默认 production（非法值报错）；`PANEL_HOST/PORT`、`DATA_DIR`、`COOKIE_SECURE`、`TRUST_PROXY`、`LOG_LEVEL`、`MAX_UPLOAD_MB`；仓库根 `.env` 由 `import.meta.url` 定位。
 - **提交约定**：小步提交；每次 `typecheck + test + lint` 全绿；不提交 `data/`、`data-e2e/`；文档不写凭据。
@@ -101,23 +106,23 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - 备份/恢复：严格冻结、manifest、保留策略、pre_restore、回滚、残留清理。
 - 计划：CRUD、立即运行、运行记录、时区。
 - 运维：审计页、面板设置与改密码、`start-panel.bat`、systemd 文档、`reset-password.mjs`、Playwright 冒烟。
+- 编辑：CodeMirror 6（行号、搜索、JSON/YAML/properties 高亮），按需加载。
+- 安全：CSP nonce、Host 限定 WebSocket；生产环境无 CSP 违规（e2e 断言）。
+- 面板数据：设置页一键下载 SQLite 在线快照；CLI 可在面板运行时备份。
+- 计划：列表与表单展示未来 3 次运行时间。
+- 前端：路由级懒加载；首屏入口 `index` 221.6 kB + `react` 246.4 kB（gzip 66.2 + 78.6 kB），`charts` 314.1 kB、`CodeEditor` 437.0 kB 按需加载。
 
-## 9. 已知限制（可接受，未阻塞第一版）
+## 9. 已知限制（可接受，未阻塞 v0.2）
 
 1. 备份 manifest 只做结构/路径校验，未与数据库存证做哈希比对；面板生成的备份可信，手工替换 zip 仍会被路径校验拦截。
 2. 运行中备份与「面板之外的进程终止」存在窄竞态；面板内的启停已被实例锁串行化。
-3. 下载备份未校验记录状态（失败/创建中的记录下载会 404/500）。
-4. 文件编辑器是 `<textarea>`（非规格里的 CodeMirror 6）；足够可用，缺语法高亮。
-5. 计划表单不预览「未来 3 次运行」，列表只显示下次/上次运行时间。
-6. Playwright 只覆盖冷备份路径与 375px 概览；上传超限、zip-slip、mtime 冲突、失败恢复由集成测试覆盖。
-7. 前端单 chunk 约 800 kB（gzip ~240 kB），recharts 进入首屏；实例路由未做 lazy。
-8. 面板自身数据库（`data/panel.db`）需手工备份。
-9. CSP 仍为 `connect-src 'self' ws: wss:`、`style-src` 含 `'unsafe-inline'`，可按部署收紧。
-10. `data/` 只存在于本机；`data-e2e/`、`test-results/` 等已 gitignore。
+3. CSP 的 `connect-src` 依据请求 Host（`TRUST_PROXY=true` 时优先 `X-Forwarded-Host`）；反向代理若既改写 Host 又不传 `X-Forwarded-Host`，浏览器会拦截 WebSocket。
+4. Playwright 覆盖初始化、纳管、启停、控制台、备份/恢复、CodeMirror 保存、面板库快照与 375px；上传超限、zip-slip、mtime 冲突、失败恢复仍由集成测试覆盖。
+5. 面板库快照只含 `panel.db`；恢复需停面板并手工替换文件，`.env` 与 `secret.key` 需单独保存。
+6. `data/` 只存在于本机；`data-e2e/`、`test-results/` 等已 gitignore。
 
 ## 10. 建议的下一步
 
-1. ~~添加 remote 并推送~~ 已完成：`origin` 指向私有仓库 `git@github.com:ss1uye/mcpanel.git`，`main` 已推送并跟踪。后续改动直接 `git push`。
-2. 纳管一个真实测试服，跑一遍手工验收矩阵（规格 §21.4），重点：Windows 中文/空格路径、面板重启时的孤儿检测、运行中严格备份、恢复。
-3. 可选增强：CodeMirror 编辑器、路由 lazy + 代码分包、CSP 收紧、面板库在线备份脚本、远程节点/告警/多用户（规格 §24）。
-4. 若继续用 AI 代理：先读本文件，再读阶段 3 计划与 `HANDOFF-phase3.md`，按“测试先行 + 小步提交”的方式推进。
+1. 纳管一个真实测试服，跑一遍手工验收矩阵（规格 §21.4），重点：Windows 中文/空格路径、面板重启时的孤儿检测、运行中严格备份、恢复、反向代理下的 CSP/`X-Forwarded-Host`。
+2. 可选增强：备份 manifest 的 SHA-256 存证与完整性校验、备份到外部存储（S3/WebDAV）、告警 Webhook、远程节点/多用户（规格 §24）。
+3. 若继续用 AI 代理：先读本文件，再读 `HANDOFF-phase4.md` 与 v0.2 计划，按“测试先行 + 小步提交”的方式推进。
