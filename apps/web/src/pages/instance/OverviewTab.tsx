@@ -1,5 +1,6 @@
 import { Link, useOutletContext } from 'react-router-dom';
 import type { InstanceOutletContext } from '../../layouts/InstanceLayout';
+import { CleanupRestoreCard } from '../../components/CleanupRestoreCard';
 import { MetricsSparkline } from '../../components/MetricsSparkline';
 import { useInstanceConsole, useInstanceMetrics } from '../../stores/realtime';
 import { RCON_LABELS } from '../../utils/labels';
@@ -32,6 +33,7 @@ export function OverviewTab() {
           {status.error}
         </div>
       )}
+      <CleanupRestoreCard instanceId={instance.id} instanceName={instance.name} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card
