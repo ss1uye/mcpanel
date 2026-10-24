@@ -1,5 +1,6 @@
 import cookie from '@fastify/cookie';
 import csrf from '@fastify/csrf-protection';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
@@ -88,6 +89,9 @@ export async function buildApp(
 
   await app.register(cookie);
   await app.register(websocket);
+  await app.register(multipart, {
+    limits: { fileSize: config.maxUploadMb * 1024 * 1024, files: 1, fields: 4 },
+  });
   await app.register(csrf, {
     cookieOpts: { path: '/', httpOnly: true, sameSite: 'lax', secure: config.cookieSecure },
     getUserInfo: csrfUserInfo,
@@ -124,6 +128,9 @@ export async function buildApp(
     }
     if (code.startsWith('FST_ERR_CTP')) {
       return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: '请求格式不正确' } });
+    }
+    if (code === 'FST_REQ_FILE_TOO_LARGE') {
+      return reply.status(413).send({ error: { code: 'FILE_TOO_LARGE', message: '上传超过大小限制' } });
     }
     if ((error as { statusCode?: number }).statusCode === 429) {
       return reply.status(429).send({ error: { code: 'LOGIN_RATE_LIMITED', message: '请求过于频繁，请稍后再试' } });

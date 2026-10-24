@@ -1,11 +1,18 @@
+import { randomUUID } from 'node:crypto';
+import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import yauzl from 'yauzl';
 import type { FileEntryInfo, FileListResult, TextFileContent } from '@mcpanel/shared';
 import type { PathSandbox } from '../nodes/path-sandbox';
 import { AppError } from '../utils/errors';
 import { writeFileAtomic } from '../utils/fs-atomic';
 
 export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
+const MAX_ZIP_ENTRIES = 100_000;
+const MAX_ZIP_BYTES = 10 * 1024 * 1024 * 1024;
 
 const BINARY_EXTENSIONS = new Set([
   '.jar',
@@ -28,6 +35,16 @@ const BINARY_EXTENSIONS = new Set([
 
 function isEnoent(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
+function isUnsafeEntry(name: string): boolean {
+  const normalized = name.replaceAll('\\', '/');
+  return (
+    normalized.startsWith('/') ||
+    /^[A-Za-z]:/.test(normalized) ||
+    normalized.split('/').some((segment) => segment === '..') ||
+    normalized.includes('\0')
+  );
 }
 
 export class FileService {
@@ -135,6 +152,146 @@ export class FileService {
     if (stat.isSymbolicLink()) throw new AppError('SYMLINK_NOT_ALLOWED', '不允许下载符号链接');
     if (!stat.isFile()) throw new AppError('UNSUPPORTED_FILE', '只能下载文件');
     return { file, name: path.basename(file), size: stat.size };
+  }
+
+  async upload(
+    root: string,
+    relPath: string,
+    filename: string,
+    stream: Readable,
+    limitBytes: number,
+  ): Promise<{ path: string }> {
+    const { rel } = await this.resolveDirectory(root, relPath);
+    const safeName = filename.replace(/[\\/]/g, '').trim();
+    if (!safeName || safeName === '.' || safeName === '..' || safeName.includes('\0')) {
+      throw new AppError('VALIDATION_ERROR', '文件名非法');
+    }
+    const nextRel = rel ? `${rel}/${safeName}` : safeName;
+    const target = await this.sandbox.resolve(root, nextRel);
+    const targetStat = await fs.lstat(target).catch((error: unknown) => {
+      if (isEnoent(error)) return null;
+      throw error;
+    });
+    if (targetStat?.isDirectory()) throw new AppError('VALIDATION_ERROR', '同名目录已存在');
+
+    const tempDir = path.join(root, '.mcpanel-tmp');
+    await fs.mkdir(tempDir, { recursive: true });
+    const temp = path.join(tempDir, `upload-${randomUUID()}.tmp`);
+    let written = 0;
+    try {
+      await pipeline(
+        stream,
+        async function* (source: AsyncIterable<Buffer>) {
+          for await (const chunk of source) {
+            written += chunk.length;
+            if (written > limitBytes) {
+              throw new AppError('FILE_TOO_LARGE', `上传超过 ${Math.floor(limitBytes / 1024 / 1024)} MB`);
+            }
+            yield chunk;
+          }
+        },
+        createWriteStream(temp),
+      );
+      await fs.rename(temp, target);
+    } catch (error) {
+      await fs.rm(temp, { force: true });
+      throw error;
+    }
+    return { path: `/${nextRel}` };
+  }
+
+  async unzip(root: string, relPath: string, targetDir?: string): Promise<{ entries: number }> {
+    const archivePath = await this.sandbox.resolve(root, relPath);
+    const archiveStat = await fs.lstat(archivePath);
+    if (archiveStat.isSymbolicLink()) throw new AppError('SYMLINK_NOT_ALLOWED', '不允许解压符号链接');
+    if (!archiveStat.isFile()) throw new AppError('ZIP_INVALID', '目标不是文件');
+
+    const sourceRel = this.sandbox.normalizeRelative(relPath);
+    const destinationRel = targetDir
+      ? this.sandbox.normalizeRelative(targetDir)
+      : path.posix.dirname(sourceRel) === '.' ? '' : path.posix.dirname(sourceRel);
+    const destination = await this.sandbox.resolve(root, destinationRel);
+    await fs.mkdir(destination, { recursive: true });
+
+    const entries = await new Promise<number>((resolve, reject) => {
+      yauzl.open(archivePath, { lazyEntries: true, autoClose: true }, (openError, zip) => {
+        if (openError || !zip) {
+          reject(new AppError('ZIP_INVALID', '压缩包无法打开'));
+          return;
+        }
+        let count = 0;
+        let totalBytes = 0;
+        let settled = false;
+        const fail = (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          zip.close();
+          reject(error instanceof AppError ? error : new AppError('ZIP_INVALID', '解压失败'));
+        };
+        zip.on('error', fail);
+        zip.on('end', () => {
+          if (settled) return;
+          settled = true;
+          resolve(count);
+        });
+        zip.on('entry', (entry: yauzl.Entry) => {
+          count += 1;
+          totalBytes += entry.uncompressedSize;
+          if (count > MAX_ZIP_ENTRIES) return fail(new AppError('ZIP_INVALID', '压缩包条目过多'));
+          if (totalBytes > MAX_ZIP_BYTES) return fail(new AppError('ZIP_INVALID', '解压后体积超过 10 GB'));
+          if (isUnsafeEntry(entry.fileName)) return fail(new AppError('ZIP_INVALID', '压缩包包含越界路径'));
+          const mode = (entry.externalFileAttributes >>> 16) & 0o170000;
+          if (mode === 0o120000) return fail(new AppError('ZIP_INVALID', '压缩包包含符号链接条目'));
+
+          if (entry.fileName.endsWith('/')) {
+            zip.readEntry();
+            return;
+          }
+          zip.openReadStream(entry, (streamError, readStream) => {
+            if (streamError || !readStream) {
+              fail(streamError ?? new AppError('ZIP_INVALID', '无法读取压缩包条目'));
+              return;
+            }
+            const outRel = destinationRel === '' ? entry.fileName : `${destinationRel}/${entry.fileName}`;
+            void this.sandbox
+              .resolve(root, outRel)
+              .then(async (outFile) => {
+                await fs.mkdir(path.dirname(outFile), { recursive: true });
+                await pipeline(readStream, createWriteStream(outFile));
+                zip.readEntry();
+              })
+              .catch(fail);
+          });
+        });
+        zip.readEntry();
+      });
+    });
+    return { entries };
+  }
+
+  async toggleMod(root: string, relPath: string): Promise<{ path: string }> {
+    const normalized = this.sandbox.normalizeRelative(relPath);
+    if (!normalized.startsWith('mods/')) throw new AppError('VALIDATION_ERROR', '只有 mods/ 目录下的模组可以启停');
+    let nextRel: string;
+    if (normalized.endsWith('.jar')) nextRel = `${normalized}.disabled`;
+    else if (normalized.endsWith('.jar.disabled')) nextRel = normalized.slice(0, -'.disabled'.length);
+    else throw new AppError('VALIDATION_ERROR', '只支持 .jar 与 .jar.disabled 文件');
+
+    const source = await this.sandbox.resolve(root, normalized);
+    const target = await this.sandbox.resolve(root, nextRel);
+    const stat = await fs.lstat(source);
+    if (stat.isSymbolicLink()) throw new AppError('SYMLINK_NOT_ALLOWED', '不允许操作符号链接');
+    if (!stat.isFile()) throw new AppError('VALIDATION_ERROR', '目标不是文件');
+    const exists = await fs.lstat(target).then(
+      () => true,
+      (error: unknown) => {
+        if (isEnoent(error)) return false;
+        throw error;
+      },
+    );
+    if (exists) throw new AppError('VALIDATION_ERROR', '目标文件已存在');
+    await fs.rename(source, target);
+    return { path: `/${nextRel}` };
   }
 
   async resolveDirectory(root: string, relPath: string): Promise<{ dir: string; rel: string }> {

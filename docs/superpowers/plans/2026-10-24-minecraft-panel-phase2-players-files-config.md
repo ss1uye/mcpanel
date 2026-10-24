@@ -1351,6 +1351,11 @@ function isUnsafeEntry(name: string): boolean {
       part.file,
       config.maxUploadMb * 1024 * 1024,
     );
+    // The multipart parser truncates the stream at the limit instead of rejecting the request.
+    if (part.file.truncated) {
+      await files.remove(row.rootPath, target.path, false).catch(() => undefined);
+      throw new AppError('FILE_TOO_LARGE', '上传超过大小限制');
+    }
     audit.record({
       userId: request.user?.id,
       action: 'file.upload',

@@ -4,8 +4,10 @@ import {
   deleteFileSchema,
   filePathSchema,
   mkdirSchema,
+  modsToggleSchema,
   renameSchema,
   saveFileSchema,
+  unzipSchema,
   type FileListResult,
 } from '@mcpanel/shared';
 import { createGuards } from '../auth/guard';
@@ -14,6 +16,7 @@ import type { AppConfig } from '../config';
 import type { AuditService } from '../services/audit-service';
 import type { FileService } from '../services/file-service';
 import type { InstanceService } from '../services/instance-service';
+import { AppError } from '../utils/errors';
 
 export interface FileRouteDeps {
   sessions: SessionService;
@@ -75,8 +78,64 @@ export function registerFileRoutes(app: FastifyInstance, deps: FileRouteDeps): v
     },
   );
 
-  app.post<{ Params: { id: string } }>('/api/instances/:id/files/mkdir', write, async (request, reply) => {
-    const input = mkdirSchema.parse(request.body);
+  app.post<{ Params: { id: string } }>('/api/instances/:id/files/upload', write, async (request, reply) => {
+    const row = instances.get(request.params.id);
+    const part = await request.file();
+    if (!part) throw new AppError('VALIDATION_ERROR', '缺少上传文件');
+    const field = part.fields['path'];
+    const rawPath = field && !Array.isArray(field) && 'value' in field ? String(field.value) : '/';
+    const target = await files.upload(
+      row.rootPath,
+      filePathSchema.parse(rawPath),
+      part.filename,
+      part.file,
+      deps.config.maxUploadMb * 1024 * 1024,
+    );
+    // The multipart parser truncates at the limit instead of failing the request.
+    if (part.file.truncated) {
+      await files.remove(row.rootPath, target.path, false).catch(() => undefined);
+      throw new AppError('FILE_TOO_LARGE', '上传超过大小限制');
+    }
+    audit.record({
+      userId: request.user?.id,
+      action: 'file.upload',
+      targetType: 'instance',
+      targetId: row.id,
+      detail: { path: target.path },
+      ip: request.ip,
+    });
+    return reply.status(201).send(target);
+  });
+
+  app.post<{ Params: { id: string } }>('/api/instances/:id/files/unzip', write, async (request) => {
+    const input = unzipSchema.parse(request.body);
+    const result = await files.unzip(rootOf(request.params.id), input.path, input.targetDir);
+    audit.record({
+      userId: request.user?.id,
+      action: 'file.unzip',
+      targetType: 'instance',
+      targetId: request.params.id,
+      detail: { path: input.path, targetDir: input.targetDir ?? null, entries: result.entries },
+      ip: request.ip,
+    });
+    return result;
+  });
+
+  app.post<{ Params: { id: string } }>('/api/instances/:id/files/mods/toggle', write, async (request) => {
+    const input = modsToggleSchema.parse(request.body);
+    const result = await files.toggleMod(rootOf(request.params.id), input.path);
+    audit.record({
+      userId: request.user?.id,
+      action: 'file.mod_toggle',
+      targetType: 'instance',
+      targetId: request.params.id,
+      detail: { path: input.path, next: result.path },
+      ip: request.ip,
+    });
+    return result;
+  });
+
+  app.post<{ Params: { id: string } }>('/api/instances/:id/files/mkdir', write, async (request, reply) => {    const input = mkdirSchema.parse(request.body);
     await files.mkdir(rootOf(request.params.id), input.path);
     audit.record({
       userId: request.user?.id,
