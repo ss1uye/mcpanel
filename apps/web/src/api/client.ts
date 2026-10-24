@@ -96,6 +96,35 @@ export async function downloadFile(path: string, filename: string): Promise<void
 export const api = {
   get: <T>(path: string, signal?: AbortSignal) => apiRequest<T>(path, { signal }),
   post: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'POST', body }),
+  put: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PATCH', body }),
   del: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'DELETE', body }),
 };
+
+export async function uploadFile<T>(path: string, formData: FormData): Promise<T> {
+  const send = (token: string) =>
+    fetch(`/api${path}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-CSRF-Token': token },
+      body: formData,
+    });
+
+  let response = await send(csrfToken ?? (await refreshCsrf()));
+  if (response.status === 403) {
+    const probe = (await response.clone().json().catch(() => null)) as ApiErrorBody | null;
+    if (probe?.error?.code === 'CSRF_INVALID') {
+      clearCsrfToken();
+      response = await send(await refreshCsrf());
+    }
+  }
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as ApiErrorBody | null;
+    throw new ApiError(
+      data?.error?.code ?? 'INTERNAL',
+      data?.error?.message ?? `上传失败（HTTP ${response.status}）`,
+      response.status,
+    );
+  }
+  return (await response.json()) as T;
+}

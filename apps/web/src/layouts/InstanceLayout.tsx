@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PanelRight, Play, RotateCw, Skull, Square, Wrench } from 'lucide-react';
-import { useState } from 'react';
-import { Link, NavLink, Outlet, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
 import type { InstanceInfo, InstanceStatusSnapshot, RconStatus } from '@mcpanel/shared';
 import { api, ApiError } from '../api/client';
 import { StatusBadge } from '../components/StatusBadge';
@@ -30,6 +30,7 @@ const tabs = [
   { to: 'overview', label: '概览' },
   { to: 'console', label: '控制台' },
   { to: 'players', label: '玩家' },
+  { to: 'files', label: '文件' },
   { to: 'settings', label: '设置' },
 ];
 
@@ -51,6 +52,12 @@ export function InstanceLayout() {
   );
   const [killOpen, setKillOpen] = useState(false);
   const [markOpen, setMarkOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Wide editors need the room; the operator can still reopen the panel manually.
+    if (/\/(files|config)$/.test(location.pathname)) setRightOpen(false);
+  }, [location.pathname]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['instances'] });
 
