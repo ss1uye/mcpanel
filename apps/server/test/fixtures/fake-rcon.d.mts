@@ -1,5 +1,6 @@
 export interface FakeRcon {
   port: number;
+  commands: string[];
   close: () => Promise<void>;
 }
 

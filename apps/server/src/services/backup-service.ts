@@ -92,6 +92,20 @@ export class BackupService {
     return path.join(this.deps.dataDir, 'backups', instanceId, row.filename);
   }
 
+  /** Fast checks the route can surface as 409 before returning 202. */
+  async preflight(row: InstanceRow): Promise<void> {
+    const state = this.deps.supervisor.getStatus(row.id).state;
+    if (state === 'starting' || state === 'stopping' || state === 'unknown') {
+      throw new AppError('INVALID_STATE', `当前状态 ${state} 不能备份`);
+    }
+    if (state === 'running' || state === 'orphaned') {
+      const rconStatus = await this.deps.rcon.statusFor(row);
+      if (rconStatus !== 'connected') {
+        throw new AppError('BACKUP_REQUIRES_STOP_OR_RCON', '服务器运行中且 RCON 不可用，请先停服再备份');
+      }
+    }
+  }
+
   startCreate(
     row: InstanceRow,
     kind: BackupKind,

@@ -29,6 +29,7 @@ export function registerBackupRoutes(app: FastifyInstance, deps: BackupRouteDeps
 
   app.post<{ Params: { id: string } }>('/api/instances/:id/backups', write, async (request, reply) => {
     const row = instances.get(request.params.id);
+    await backups.preflight(row);
     const { task, backupId, done } = backups.startCreate(row, 'manual');
     void done.catch(() => undefined);
     audit.record({

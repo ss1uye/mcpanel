@@ -5,6 +5,7 @@ import net from 'node:net';
 export function startFakeRcon({ password = 'secret', port = 0, saveAllDelayMs = 0, logFile = null } = {}) {
   return new Promise((resolve) => {
     const connections = new Set();
+    const commands = [];
     const server = net.createServer((socket) => {
       connections.add(socket);
       let authenticated = false;
@@ -30,6 +31,7 @@ export function startFakeRcon({ password = 'secret', port = 0, saveAllDelayMs = 
               socket.destroy();
               continue;
             }
+            commands.push(body);
             const reply = respond(body, saveAllDelayMs, logFile);
             if (reply === null) continue;
             send(socket, id, 0, reply);
@@ -42,6 +44,7 @@ export function startFakeRcon({ password = 'secret', port = 0, saveAllDelayMs = 
     server.listen(port, '127.0.0.1', () => {
       resolve({
         port: server.address().port,
+        commands,
         close: () =>
           new Promise((done) => {
             for (const socket of connections) socket.destroy();
