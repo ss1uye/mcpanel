@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import type { PropertiesPayload } from '@mcpanel/shared';
 import type { InstanceOutletContext } from '../../layouts/InstanceLayout';
@@ -8,6 +8,8 @@ import { PropertiesForm } from '../../components/PropertiesForm';
 import { RconEnableDialog } from '../../components/RconEnableDialog';
 import { Button, ErrorState, Field, Notice, Spinner, toast } from '../../components/ui';
 import { diffProperties } from '../../utils/properties';
+
+const CodeEditor = lazy(() => import('../../components/CodeEditor'));
 
 export function ConfigTab() {
   const { instance } = useOutletContext<InstanceOutletContext>();
@@ -122,13 +124,21 @@ export function ConfigTab() {
         <PropertiesForm payload={data} values={current} onChange={setValues} />
       ) : (
         <Field label="server.properties" hint="只保存值发生变化的键；注释、顺序与换行风格保持不变（不支持删除键）">
-          <textarea
-            aria-label="server.properties 内容"
-            className="console-font h-96 w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--console-bg)] p-3 text-xs leading-5 text-[var(--console-fg)]"
-            value={raw}
-            spellCheck={false}
-            onChange={(event) => setRawDraft(event.target.value)}
-          />
+          <Suspense
+            fallback={
+              <div className="grid h-96 place-items-center">
+                <Spinner />
+              </div>
+            }
+          >
+            <CodeEditor
+              path="server.properties"
+              value={raw}
+              onChange={setRawDraft}
+              ariaLabel="server.properties 内容"
+              heightClass="h-96"
+            />
+          </Suspense>
         </Field>
       )}
 

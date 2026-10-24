@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { TextFileContent } from '@mcpanel/shared';
 import { api, ApiError } from '../api/client';
 import { Button, Dialog, ErrorState, Spinner, toast } from './ui';
+
+const CodeEditor = lazy(() => import('./CodeEditor'));
 
 export function FileEditorDialog({
   instanceId,
@@ -92,13 +94,15 @@ export function FileEditorDialog({
         <ErrorState message="文件读取失败或不是文本文件" />
       ) : (
         <div className="flex flex-col gap-3">
-          <textarea
-            className="console-font h-80 w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--console-bg)] p-3 text-xs leading-5 text-[var(--console-fg)] focus:border-[var(--primary)] focus:outline-none"
-            value={content}
-            spellCheck={false}
-            aria-label="文件内容"
-            onChange={(event) => setContent(event.target.value)}
-          />
+          <Suspense
+            fallback={
+              <div className="grid h-80 place-items-center">
+                <Spinner />
+              </div>
+            }
+          >
+            <CodeEditor path={path ?? ''} value={content} onChange={setContent} ariaLabel="文件内容" />
+          </Suspense>
           {conflict && (
             <div className="rounded-lg border border-[var(--warn)]/40 bg-[var(--warn-soft)] p-3 text-sm text-[var(--warn)]">
               文件已被外部修改。重新加载会丢弃当前编辑；强制覆盖会以最新版本为基线保存。
