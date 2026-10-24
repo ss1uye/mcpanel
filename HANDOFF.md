@@ -20,7 +20,7 @@ npm run build && npm start        # 生产：http://127.0.0.1:3000
 
 ```bash
 npm run typecheck      # 0 错误
-npm test               # server 212 / web 49 / shared 12
+npm test               # server 219 / web 52 / shared 12
 npm run lint
 npm run build
 npm run test:e2e       # Playwright Chromium，约 10s
@@ -66,10 +66,10 @@ apps/server/src/
 ├─ ws/hub.ts            console/state/metrics/task 频道，backpressure 与空闲断开
 └─ db/                  schema + 手写 drizzle/0000_init.sql + 迁移校验
 apps/web/src/
-├─ api/client.ts        CSRF 会话绑定 + 单次重试、401 事件、blob 下载、multipart 上传
+├─ api/client.ts        CSRF 会话绑定 + 单次重试、401 事件、流式下载（File System Access API，blob 回退）、multipart 上传
 ├─ stores/realtime.ts   WS 引用计数、重连退避、console/metrics/state/tasks 切片
 ├─ pages/               Dashboard/Instances/Audit/Settings + instance/{Overview,Console,Players,Files,Config,Backups,Schedules,Settings}
-├─ components/          UI 原语、PlayerList、FileBrowser/Editor、PropertiesForm、BackupList、ScheduleForm、TaskProgress…
+├─ components/          UI 原语、ErrorBoundary、PlayerList、FileBrowser/Editor、PropertiesForm、BackupList、ScheduleForm、TaskProgress…
 packages/shared/        types/constants/errors/zod schemas（浏览器安全，不得 import node:*）
 scripts/                dev.mjs、start-panel.bat、reset-password.mjs、clean-e2e.mjs
 e2e/                    Playwright 冒烟（global-setup 造临时假服务端）
@@ -92,8 +92,9 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 ## 7. 仓库配套
 
 - 许可证：MIT（`LICENSE`）。
-- CI：`.github/workflows/ci.yml`，`main` push 与 PR 在 **ubuntu-latest + windows-latest** 上执行
-  `npm ci` → `typecheck` → `test` → `lint` → `build`（CI 使用 npm 11.19.1）。Playwright 未纳入 CI。
+- CI：`.github/workflows/ci.yml`，`main` push 与 PR 触发三个 job（`concurrency` 同分支去重，npm 11.19.1）：
+  `static`（ubuntu：typecheck + lint）、`test`（ubuntu + windows 矩阵：test + build）、
+  `e2e`（ubuntu：Playwright Chromium，假服务端 start 脚本按平台生成）。
 - 仓库描述与 topics 需在 GitHub 网页设置（API 写入需要 token，本项目只用 SSH）。
 
 ## 8. 已验证的能力
@@ -120,6 +121,10 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 4. Playwright 覆盖初始化、纳管、启停、控制台、备份/恢复、CodeMirror 保存、面板库快照与 375px；上传超限、zip-slip、mtime 冲突、失败恢复仍由集成测试覆盖。
 5. 面板库快照只含 `panel.db`；恢复需停面板并手工替换文件，`.env` 与 `secret.key` 需单独保存。
 6. `data/` 只存在于本机；`data-e2e/`、`test-results/` 等已 gitignore。
+7. Linux 上孤儿 PID 身份校验可能失准：`sh -c` 对末条命令做 exec 优化后 cmdline 不含实例路径，且 `systeminformation` 抛错时按"已验证"处理——面板重启后可能把运行中的服务器误标为 crashed（`instance-supervisor.ts` recover）。
+8. 上传与解压没有磁盘空间预检（备份/恢复已有）；删除实例的备份目录用同步 `rmSync`，大目录会短暂阻塞事件循环。
+9. 登录限速按 `request.ip`：`TRUST_PROXY=true` 且前面没有净化 `X-Forwarded-For` 的反代时可被伪造头绕过；共享出口 IP 时可反向锁死管理员 15 分钟。
+10. WS 连接在会话吊销（登出/改密码）后仍存活到断开为止；前端上传无进度/不可取消，WS 心跳不校验 pong（休眠恢复后连接可能假死约 10 分钟）。
 
 ## 10. 建议的下一步
 

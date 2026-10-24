@@ -15,5 +15,13 @@ export default async function globalSetup(): Promise<void> {
     'level-name=world\nserver-port=25620\nenable-rcon=false\nonline-mode=true\nmotd=e2e\n',
   );
   const fixture = path.resolve('apps/server/test/fixtures/fake-server.mjs');
-  await fs.writeFile(path.join(INSTANCE_ROOT, 'start.bat'), `@echo off\r\nnode "${fixture}" %*\r\n`);
+  if (process.platform === 'win32') {
+    await fs.writeFile(path.join(INSTANCE_ROOT, 'start.bat'), `@echo off\r\nnode "${fixture}" %*\r\n`);
+  } else {
+    await fs.writeFile(
+      path.join(INSTANCE_ROOT, 'start.sh'),
+      `#!/bin/sh\nexec node "${fixture}" "$@"\n`,
+      { mode: 0o755 },
+    );
+  }
 }
