@@ -8,6 +8,7 @@ import { AppShell } from './layouts/AppShell';
 import { InstanceLayout } from './layouts/InstanceLayout';
 import { AuditPage } from './pages/AuditPage';
 import { BackupsTab } from './pages/instance/BackupsTab';
+import { SchedulesTab } from './pages/instance/SchedulesTab';
 import { DashboardPage } from './pages/DashboardPage';
 import { InstancesPage } from './pages/InstancesPage';
 import { LoginPage } from './pages/LoginPage';
@@ -67,6 +68,7 @@ export function AppRouter() {
           <Route path="files" element={<FilesTab />} />
           <Route path="config" element={<ConfigTab />} />
           <Route path="backups" element={<BackupsTab />} />
+          <Route path="schedules" element={<SchedulesTab />} />
           <Route path="settings" element={<InstanceSettingsTab />} />
         </Route>
       </Route>
