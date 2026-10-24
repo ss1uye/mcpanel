@@ -57,5 +57,5 @@ mtime 冲突对话框、一键启用 RCON 对话框的完整交互。注意 CDP 
 
 ## 下一步（阶段 3）
 
-按规格 §12/§13/§20 写阶段 3 计划：严格一致备份与恢复、定时任务、Windows `start-panel.bat`/systemd、Playwright 冒烟。
-阶段 3 开工前建议先把本阶段的手工验收固化成一条脚本化冒烟。
+阶段 3 计划已保存：`docs/superpowers/plans/2026-10-24-minecraft-panel-phase3-backups-schedules-deploy.md`（15 个任务）。
+按该计划执行；本阶段的手工验收已固化进计划 Task 13 的 Playwright 冒烟。
