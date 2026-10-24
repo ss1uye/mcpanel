@@ -1,4 +1,12 @@
-import type { InstanceState, LogEncoding, RconStatus } from './constants';
+import type {
+  BackupKind,
+  BackupStatus,
+  InstanceState,
+  LogEncoding,
+  RconStatus,
+  ScheduleActionType,
+  ScheduleRunStatus,
+} from './constants';
 
 export interface UserInfo {
   id: string;
@@ -157,6 +165,7 @@ export type ServerWsMessage =
   | { type: 'players.update'; instanceId: string; online: string[]; max: number; rconStatus: RconStatus }
   | { type: 'notification'; level: 'info' | 'warning' | 'error'; message: string }
   | { type: 'pong' }
+  | { type: 'task.update'; task: TaskInfo }
   | { type: 'error'; code: string; message: string };
 
 export interface FileEntryInfo {
@@ -212,4 +221,63 @@ export interface PanelSettings {
   panelName: string;
   defaultTimezone: string;
   auditRetentionDays: number;
+}
+
+export interface BackupManifest {
+  schemaVersion: 1;
+  panelVersion: string;
+  instanceName: string;
+  createdAt: string;
+  sources: string[];
+  fileCount: number;
+  totalBytes: number;
+}
+
+export interface BackupInfo {
+  id: string;
+  instanceId: string;
+  filename: string;
+  kind: BackupKind;
+  status: BackupStatus;
+  sizeBytes: number | null;
+  includesMods: boolean;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface ScheduleInfo {
+  id: string;
+  instanceId: string;
+  name: string;
+  cron: string;
+  timezone: string;
+  actionType: ScheduleActionType;
+  command: string | null;
+  message: string | null;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+}
+
+export interface ScheduleRunInfo {
+  id: string;
+  scheduleId: string;
+  trigger: 'scheduled' | 'manual';
+  status: ScheduleRunStatus;
+  message: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface TaskInfo {
+  id: string;
+  kind: 'backup' | 'restore';
+  instanceId: string;
+  status: 'running' | 'success' | 'failed';
+  progress: number;
+  message: string | null;
+  startedAt: string;
+  finishedAt: string | null;
 }

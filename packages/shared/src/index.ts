@@ -8,3 +8,4 @@ export * from './schemas/ws';
 export * from './schemas/files';
 export * from './schemas/players';
 export * from './schemas/settings';
+export * from './schemas/automation';

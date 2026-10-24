@@ -14,3 +14,12 @@ export type RconStatus = (typeof RCON_STATUSES)[number];
 
 export const LOG_ENCODINGS = ['utf-8', 'gbk'] as const;
 export type LogEncoding = (typeof LOG_ENCODINGS)[number];
+
+export const BACKUP_KINDS = ['manual', 'scheduled', 'pre_restore'] as const;
+export type BackupKind = (typeof BACKUP_KINDS)[number];
+export const BACKUP_STATUSES = ['creating', 'ready', 'failed', 'restoring'] as const;
+export type BackupStatus = (typeof BACKUP_STATUSES)[number];
+export const SCHEDULE_ACTIONS = ['backup', 'start', 'stop', 'restart', 'command', 'broadcast'] as const;
+export type ScheduleActionType = (typeof SCHEDULE_ACTIONS)[number];
+export const SCHEDULE_RUN_STATUSES = ['running', 'success', 'failed', 'skipped'] as const;
+export type ScheduleRunStatus = (typeof SCHEDULE_RUN_STATUSES)[number];

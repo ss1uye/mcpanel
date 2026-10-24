@@ -11,6 +11,7 @@ import {
 import { playerActionSchema } from '../src/schemas/players';
 import { filePathSchema, saveFileSchema, renameSchema } from '../src/schemas/files';
 import { panelSettingsSchema } from '../src/schemas/settings';
+import { createScheduleSchema, updateScheduleSchema, restoreBackupSchema } from '../src/schemas/automation';
 
 describe('shared contracts', () => {
   it('rejects a password shorter than 12 characters', () => {
@@ -90,5 +91,35 @@ describe('phase 2 schemas', () => {
     ).toMatchObject({ auditRetentionDays: 30 });
     expect(() => panelSettingsSchema.partial().parse({ defaultTimezone: 'Not/AZone' })).toThrow();
     expect(() => panelSettingsSchema.partial().parse({ auditRetentionDays: 0 })).toThrow();
+  });
+});
+
+describe('phase 3 schemas', () => {
+  it('requires a payload for command and broadcast schedules', () => {
+    expect(() =>
+      createScheduleSchema.parse({ name: '每日备份', cron: '0 4 * * *', timezone: 'Asia/Shanghai', actionType: 'backup' }),
+    ).not.toThrow();
+    expect(() =>
+      createScheduleSchema.parse({ name: '广播', cron: '0 9 * * *', timezone: 'Asia/Shanghai', actionType: 'broadcast' }),
+    ).toThrow();
+    expect(
+      createScheduleSchema.parse({
+        name: '广播',
+        cron: '0 9 * * *',
+        timezone: 'Asia/Shanghai',
+        actionType: 'broadcast',
+        message: '早上好',
+      }),
+    ).toMatchObject({ message: '早上好', enabled: true });
+    expect(() =>
+      createScheduleSchema.parse({ name: '命令', cron: '*/5 * * * *', timezone: 'Asia/Shanghai', actionType: 'command' }),
+    ).toThrow();
+  });
+
+  it('validates partial schedule updates and restore confirmation', () => {
+    expect(updateScheduleSchema.parse({ enabled: false })).toEqual({ enabled: false });
+    expect(() => updateScheduleSchema.parse({})).toThrow();
+    expect(() => restoreBackupSchema.parse({})).toThrow();
+    expect(restoreBackupSchema.parse({ confirm: true })).toEqual({ confirm: true });
   });
 });
