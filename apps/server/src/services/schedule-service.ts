@@ -45,8 +45,18 @@ export function nextRunsFor(cron: string, timezone: string, count = 3): string[]
   }
 }
 
+function parsePayload(raw: string): { command?: string; message?: string } {
+  try {
+    return JSON.parse(raw) as { command?: string; message?: string };
+  } catch {
+    // One corrupted row must not fail list()/start() — the latter runs at boot
+    // and would otherwise abort panel startup.
+    return {};
+  }
+}
+
 function toInfo(row: typeof schedules.$inferSelect): ScheduleInfo {
-  const payload = JSON.parse(row.payloadJson) as { command?: string; message?: string };
+  const payload = parsePayload(row.payloadJson);
   return {
     id: row.id,
     instanceId: row.instanceId,
@@ -235,6 +245,14 @@ export class ScheduleService {
     if (this.running.has(schedule.id)) {
       return this.recordRun(schedule.id, trigger, 'skipped', '上一次运行尚未结束', startedAt, Date.now());
     }
+    // The cron closure captured the instance row when the job was (re)scheduled;
+    // rootPath or backup options may have changed since. Re-read at fire time.
+    let current: InstanceRow;
+    try {
+      current = this.deps.instances.get(row.id);
+    } catch {
+      return this.recordRun(schedule.id, trigger, 'failed', '实例不存在', startedAt, Date.now());
+    }
     this.running.add(schedule.id);
     const runId = randomUUID();
     this.deps.db
@@ -244,7 +262,7 @@ export class ScheduleService {
     let status: 'success' | 'failed' | 'skipped' = 'success';
     let message: string | null = null;
     try {
-      const outcome = await this.perform(row, schedule);
+      const outcome = await this.perform(current, schedule, trigger);
       status = outcome.status;
       message = outcome.message;
     } catch (error) {
@@ -277,16 +295,17 @@ export class ScheduleService {
   private async perform(
     row: InstanceRow,
     schedule: ScheduleInfo,
+    trigger: 'scheduled' | 'manual',
   ): Promise<{ status: 'success' | 'failed' | 'skipped'; message: string | null }> {
     const state = this.deps.supervisor.getStatus(row.id).state;
     switch (schedule.actionType) {
       case 'backup':
-        await this.deps.backups.startCreate(row, 'scheduled').done;
+        await this.deps.backups.startCreate(row, trigger).done;
         this.deps.audit.record({
           action: 'backup.create',
           targetType: 'instance',
           targetId: row.id,
-          detail: { kind: 'scheduled', scheduleId: schedule.id },
+          detail: { kind: trigger, scheduleId: schedule.id },
         });
         return { status: 'success', message: '备份完成' };
       case 'start':
@@ -338,7 +357,7 @@ export class ScheduleService {
   private recordRun(
     scheduleId: string,
     trigger: 'scheduled' | 'manual',
-    status: 'skipped',
+    status: 'skipped' | 'failed',
     message: string,
     startedAt: number,
     finishedAt: number,

@@ -149,4 +149,21 @@ describe('AuditService', () => {
     expect(errorSpy).toHaveBeenCalledWith('[audit] failed to write audit log', expect.any(TypeError));
     expect(ctx.db.select().from(auditLogs).all()).toHaveLength(0);
   });
+
+  it('deletes rows older than the retention window and ignores invalid windows', () => {
+    ctx = createTestDb();
+    const service = new AuditService(ctx.db);
+    const day = 24 * 60 * 60_000;
+    const now = Date.now();
+    insertAudit('old', now - 91 * day);
+    insertAudit('edge', now - 89 * day);
+    insertAudit('new', now);
+
+    expect(service.cleanupOlderThan(90)).toBe(1);
+    expect(ctx.db.select().from(auditLogs).all().map((row) => row.id).sort()).toEqual(['edge', 'new']);
+
+    expect(service.cleanupOlderThan(0)).toBe(0);
+    expect(service.cleanupOlderThan(Number.NaN)).toBe(0);
+    expect(ctx.db.select().from(auditLogs).all()).toHaveLength(2);
+  });
 });

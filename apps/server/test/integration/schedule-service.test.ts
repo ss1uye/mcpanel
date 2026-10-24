@@ -1,10 +1,13 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuditService } from '../../src/services/audit-service';
+import { schedules } from '../../src/db/schema';
 import { silentLogger } from '../../src/logger';
 import { ScheduleService, nextRunsFor } from '../../src/services/schedule-service';
+import { AppError } from '../../src/utils/errors';
 import { createTestDb, type TestDb } from '../helpers/db';
 import { insertInstanceRow } from '../helpers/factory';
 
@@ -17,6 +20,8 @@ async function setup() {
   const root = path.join(dir, 'server');
   await fs.mkdir(root, { recursive: true });
   const instance = insertInstanceRow(ctx.db, { rootPath: root });
+  // Mirrors InstanceService.get: undefined row (deleted) surfaces as NOT_FOUND.
+  let currentInstance: typeof instance | undefined = instance;
   let state: 'stopped' | 'running' = 'stopped';
   const sendCommand = vi.fn(async () => undefined);
   const start = vi.fn(async () => {
@@ -25,9 +30,20 @@ async function setup() {
   const stop = vi.fn(async () => {
     state = 'stopped';
   });
+  const startCreate = vi.fn(() => ({
+    task: { id: 't' },
+    backupId: 'b',
+    done: Promise.resolve(),
+  }));
   const service = new ScheduleService({
     db: ctx.db,
-    instances: { get: () => instance, list: () => [instance] } as never,
+    instances: {
+      get: () => {
+        if (!currentInstance) throw new AppError('NOT_FOUND', '实例不存在');
+        return currentInstance;
+      },
+      list: () => [instance],
+    } as never,
     supervisor: {
       getStatus: () => ({
         instanceId: instance.id,
@@ -42,13 +58,7 @@ async function setup() {
       restart: vi.fn(async () => undefined),
       sendCommand,
     } as never,
-    backups: {
-      startCreate: vi.fn(() => ({
-        task: { id: 't' },
-        backupId: 'b',
-        done: Promise.resolve(),
-      })),
-    } as never,
+    backups: { startCreate } as never,
     audit: new AuditService(ctx.db),
     logger: silentLogger(),
   });
@@ -60,7 +70,18 @@ async function setup() {
     command: 'list',
     enabled: true,
   });
-  return { service, instance, schedule, sendCommand, start, stop };
+  return {
+    service,
+    instance,
+    schedule,
+    sendCommand,
+    start,
+    stop,
+    startCreate,
+    setCurrent: (row: typeof instance | undefined) => {
+      currentInstance = row;
+    },
+  };
 }
 
 afterEach(async () => {
@@ -76,6 +97,39 @@ describe('ScheduleService', () => {
     expect(listed.nextRunAt).not.toBeNull();
     expect(listed.nextRuns).toHaveLength(3);
     expect(nextRunsFor(schedule.cron, schedule.timezone)).toHaveLength(3);
+  });
+
+  it('re-reads the instance row at fire time instead of using the creation snapshot', async () => {
+    const { service, instance, startCreate, setCurrent } = await setup();
+    const backupSchedule = service.create(instance, {
+      name: '每日备份',
+      cron: '0 4 * * *',
+      timezone: 'Asia/Shanghai',
+      actionType: 'backup',
+      enabled: true,
+    });
+    const edited = { ...instance, rootPath: `${instance.rootPath}-moved`, backupIncludeMods: !instance.backupIncludeMods };
+    setCurrent(edited);
+
+    // runNow hands over the stale row captured before the edit; execute must
+    // still act on the current row.
+    await service.runNow(instance, backupSchedule.id);
+    expect(startCreate).toHaveBeenCalledWith(edited, 'manual');
+  });
+
+  it('records a failed run instead of throwing when the instance was deleted', async () => {
+    const { service, instance, schedule, setCurrent } = await setup();
+    setCurrent(undefined);
+    const run = await service.runNow(instance, schedule.id);
+    expect(run).toMatchObject({ status: 'failed', message: '实例不存在' });
+    expect(service.runs(instance, schedule.id)).toHaveLength(1);
+  });
+
+  it('tolerates a corrupt payloadJson instead of failing list() and boot', async () => {
+    const { service, instance, schedule } = await setup();
+    ctx!.db.update(schedules).set({ payloadJson: '{corrupt' }).where(eq(schedules.id, schedule.id)).run();
+    const listed = service.list(instance);
+    expect(listed[0]).toMatchObject({ id: schedule.id, command: null, message: null });
   });
 
   it('rejects invalid cron expressions', async () => {

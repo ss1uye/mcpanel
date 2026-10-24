@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { count, desc, like } from 'drizzle-orm';
+import { count, desc, like, lt } from 'drizzle-orm';
 import type { AuditEntry, Paginated } from '@mcpanel/shared';
 import type { Logger } from 'pino';
 import type { DB } from '../db/client';
@@ -91,6 +91,13 @@ export class AuditService {
         console.error('[audit] failed to write audit log', error);
       }
     }
+  }
+
+  /** Enforces the panel setting 审计保留天数; returns the number of deleted rows. */
+  cleanupOlderThan(days: number): number {
+    if (!Number.isFinite(days) || days < 1) return 0;
+    const cutoff = Date.now() - days * 24 * 60 * 60_000;
+    return this.db.delete(auditLogs).where(lt(auditLogs.createdAt, cutoff)).run().changes;
   }
 
   list(query: { page: number; pageSize: number; action?: string }): Paginated<AuditEntry> {

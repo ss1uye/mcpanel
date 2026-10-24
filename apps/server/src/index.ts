@@ -87,6 +87,19 @@ for (const [instanceId, message] of restoreLeftovers) {
 const metrics = new MetricsService({ supervisor, db: handle.db, dataDir: config.dataDir });
 const players = new PlayersService(sandbox, rcon, (instanceId) => supervisor.getStatus(instanceId).state);
 const settings = new SettingsService(handle.db);
+
+// Enforce retention: without this sweep, audit_logs and expired session rows
+// grow forever (the 审计保留天数 setting was previously never applied).
+const sweepRetention = (): void => {
+  const removedAudit = audit.cleanupOlderThan(settings.get().auditRetentionDays);
+  if (removedAudit > 0) logger.info({ removed: removedAudit }, 'audit retention sweep');
+  const removedSessions = sessions.cleanupExpired();
+  if (removedSessions > 0) logger.info({ removed: removedSessions }, 'expired session sweep');
+};
+sweepRetention();
+const retentionSweeper = setInterval(sweepRetention, 60 * 60_000);
+retentionSweeper.unref();
+
 const panelBackup = new PanelBackupService({ sqlite: handle.sqlite, dataDir: config.dataDir });
 const schedules = new ScheduleService({
   db: handle.db,
@@ -109,7 +122,6 @@ const app = await buildApp(
 
 try {
   await app.listen({ host: config.host, port: config.port });
-schedules.start();
 } catch (error) {
   const code = (error as NodeJS.ErrnoException).code;
   if (code === 'EADDRINUSE') {
@@ -126,6 +138,9 @@ schedules.start();
   handle.sqlite.close();
   process.exit(1);
 }
+// Outside the listen try: a scheduler failure must not be misreported as a
+// bind failure (and vice versa).
+schedules.start();
 logger.info({ host: config.host, port: config.port, dataDir: config.dataDir }, 'MC Panel started');
 if (userCount === 0) logger.info('尚未初始化管理员，请使用面板首页完成初始化');
 
