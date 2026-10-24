@@ -10,6 +10,7 @@ import { AuditPage } from './pages/AuditPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InstancesPage } from './pages/InstancesPage';
 import { LoginPage } from './pages/LoginPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { SetupPage } from './pages/SetupPage';
 import { ConfigTab } from './pages/instance/ConfigTab';
 import { ConsoleTab } from './pages/instance/ConsoleTab';
@@ -56,6 +57,7 @@ export function AppRouter() {
         <Route index element={<DashboardPage />} />
         <Route path="instances" element={<InstancesPage />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="instances/:id" element={<InstanceLayout />}>
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<OverviewTab />} />

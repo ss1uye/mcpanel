@@ -1,8 +1,8 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { LayoutDashboard, LogOut, Menu, Moon, ScrollText, Server, Sun } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { LayoutDashboard, LogOut, Menu, Moon, ScrollText, Server, Settings, Sun } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { PANEL_VERSION } from '@mcpanel/shared';
+import { PANEL_VERSION, type PanelSettings } from '@mcpanel/shared';
 import { api, clearCsrfToken } from '../api/client';
 import { disconnectRealtime, useConnectionState, useRealtime } from '../stores/realtime';
 import { useUi } from '../stores/ui';
@@ -25,6 +25,7 @@ const navigation = [
   { to: '/', label: '总览', icon: LayoutDashboard, end: true },
   { to: '/instances', label: '实例', icon: Server, end: false },
   { to: '/audit', label: '审计', icon: ScrollText, end: true },
+  { to: '/settings', label: '设置', icon: Settings, end: true },
 ];
 
 export function AppShell() {
@@ -32,6 +33,8 @@ export function AppShell() {
   const [loggingOut, setLoggingOut] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: () => api.get<PanelSettings>('/settings') });
+  const panelName = settingsQuery.data?.panelName ?? 'MC Panel';
   const theme = useUi((state) => state.theme);
   const setTheme = useUi((state) => state.setTheme);
 
@@ -61,7 +64,7 @@ export function AppShell() {
           <span className="h-2.5 w-2.5 rounded-[2px] bg-[var(--primary)]/30" />
           <span className="h-2.5 w-2.5 rounded-[2px] bg-[var(--primary)]/70" />
         </div>
-        <span className="text-base font-semibold tracking-wide">MC Panel</span>
+        <span className="text-base font-semibold tracking-wide">{panelName}</span>
       </div>
       <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
         {navigation.map((item) => (
@@ -119,7 +122,7 @@ export function AppShell() {
           <Button variant="ghost" onClick={() => setDrawer(true)} aria-label="打开菜单">
             <Menu className="h-5 w-5" />
           </Button>
-          <span className="font-semibold">MC Panel</span>
+          <span className="font-semibold">{panelName}</span>
           <button type="button" onClick={cycleTheme} className="p-2 text-[var(--muted)]" aria-label="切换主题">
             {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
           </button>
