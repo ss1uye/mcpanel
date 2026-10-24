@@ -160,7 +160,9 @@ export async function buildApp(
 
   app.addHook('onSend', async (request, reply, payload) => {
     for (const [header, value] of Object.entries(BASE_SECURITY_HEADERS)) reply.header(header, value);
-    reply.header('Content-Security-Policy', buildCsp(request.headers.host, request.cspNonce));
+    const forwarded = config.trustProxy ? request.headers['x-forwarded-host'] : undefined;
+    const forwardedHost = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim();
+    reply.header('Content-Security-Policy', buildCsp(forwardedHost || request.headers.host, request.cspNonce));
     return payload;
   });
 

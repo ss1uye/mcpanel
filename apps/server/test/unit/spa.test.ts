@@ -126,6 +126,20 @@ describe('SPA hosting', () => {
     expect(invalidCsp).toContain("connect-src 'self'");
     expect(invalidCsp).not.toContain('evil.example');
 
+    const proxiedApp = await buildApp(
+      { ...config, trustProxy: true },
+      db.db,
+      { sessions: new SessionService(db.db), audit: new AuditService(db.db), loginThrottle: new LoginThrottle() },
+      { logger: silentLogger(), serveStatic: true },
+    );
+    const proxied = await proxiedApp.inject({
+      method: 'GET',
+      url: '/',
+      headers: { host: '127.0.0.1:3130', 'x-forwarded-host': 'panel.example.com' },
+    });
+    expect(String(proxied.headers['content-security-policy'])).toContain('ws://panel.example.com');
+    await proxiedApp.close();
+
     await app.close();
   });
 });
