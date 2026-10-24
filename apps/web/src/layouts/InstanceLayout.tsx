@@ -29,6 +29,7 @@ const RIGHT_PANEL_KEY = 'mcpanel:right-panel';
 const tabs = [
   { to: 'overview', label: '概览' },
   { to: 'console', label: '控制台' },
+  { to: 'players', label: '玩家' },
   { to: 'settings', label: '设置' },
 ];
 

@@ -1,5 +1,6 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Loader2, X } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Loader2, MoreHorizontal, X } from 'lucide-react';
 import { create } from 'zustand';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 import { cn } from '../../utils/cn';
@@ -282,5 +283,51 @@ export function ConfirmDialog({
     >
       {children}
     </Dialog>
+  );
+}
+
+export function Menu({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Button variant="ghost" className="h-8 px-2" aria-label={label}>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          className="z-50 min-w-40 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 text-sm shadow-lg"
+        >
+          {children}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+export function MenuItem({
+  onSelect,
+  danger = false,
+  disabled = false,
+  children,
+}: {
+  onSelect: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <DropdownMenu.Item
+      disabled={disabled}
+      onSelect={onSelect}
+      className={cn(
+        'cursor-pointer rounded-md px-3 py-1.5 outline-none data-[highlighted]:bg-[var(--surface-2)]',
+        danger && 'text-[var(--danger)]',
+        disabled && 'cursor-not-allowed opacity-50',
+      )}
+    >
+      {children}
+    </DropdownMenu.Item>
   );
 }

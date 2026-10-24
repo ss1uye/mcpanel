@@ -13,6 +13,7 @@ import { SetupPage } from './pages/SetupPage';
 import { ConsoleTab } from './pages/instance/ConsoleTab';
 import { InstanceSettingsTab } from './pages/instance/InstanceSettingsTab';
 import { OverviewTab } from './pages/instance/OverviewTab';
+import { PlayersTab } from './pages/instance/PlayersTab';
 
 function AuthGate({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -55,6 +56,7 @@ export function AppRouter() {
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<OverviewTab />} />
           <Route path="console" element={<ConsoleTab />} />
+          <Route path="players" element={<PlayersTab />} />
           <Route path="settings" element={<InstanceSettingsTab />} />
         </Route>
       </Route>
