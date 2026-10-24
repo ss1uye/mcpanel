@@ -89,6 +89,6 @@
 
 ## 7. 下一步建议
 
-1. 先把 `phase1-core` 合并或提 PR 到 `main`（尚未合并）。
-2. 用 `superpowers:writing-plans` 基于规格的阶段 2 章节写计划：文件管理 + 配置编辑 + 玩家管理 + `/settings`（改密码）+ 上述审查遗留小项。
+1. `main` 已在阶段 1 收尾后创建并指向 `a25c29c`（与 `phase1-core` 同一提交），当前工作分支为 `main`；仓库没有配置远程，后续如需 PR 需先添加 remote。
+2. 阶段 2 计划已写好：`docs/superpowers/plans/2026-10-24-minecraft-panel-phase2-players-files-config.md`（14 个任务；玩家、文件、配置、EULA、审计、面板设置）。按该计划执行，执行时以计划内的命令与预期结果为准。
 3. 阶段 2 开工前先补一条端到端冒烟（Playwright 或脚本），把"纳管→启动→控制台→停止"固化为可重跑的检查，避免同类 runtime 缺陷再次只在手工验收里暴露。
