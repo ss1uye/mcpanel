@@ -22,6 +22,7 @@ import { registerFileRoutes } from './routes/files';
 import { registerInstanceRoutes } from './routes/instances';
 import { registerPlayerRoutes } from './routes/players';
 import { registerRconRoutes } from './routes/rcon';
+import { registerScheduleRoutes } from './routes/schedules';
 import { registerSettingsRoutes } from './routes/settings';
 import { registerSystemRoutes } from './routes/system';
 import type { LocalNodeDriver } from './nodes/local-driver';
@@ -37,6 +38,7 @@ import type { ProbeService } from './services/probe-service';
 import type { RconConfigService } from './services/rcon-config-service';
 import type { RconService } from './services/rcon-service';
 import type { RestoreService } from './services/restore-service';
+import type { ScheduleService } from './services/schedule-service';
 import type { SettingsService } from './services/settings-service';
 import type { TaskTracker } from './services/task-tracker';
 import { AppError } from './utils/errors';
@@ -60,6 +62,7 @@ export interface AppServices {
   backups?: BackupService;
   restore?: RestoreService;
   tasks?: TaskTracker;
+  schedules?: ScheduleService;
 }
 
 export interface BuildAppOptions {
@@ -187,6 +190,16 @@ export async function buildApp(
     registerSettingsRoutes(app, { sessions: services.sessions, audit: services.audit, settings: services.settings });
   }
 
+  if (services.instances && services.schedules && services.settings) {
+    registerScheduleRoutes(app, {
+      sessions: services.sessions,
+      audit: services.audit,
+      instances: services.instances,
+      schedules: services.schedules,
+      settings: services.settings,
+    });
+  }
+
   if (services.instances && services.supervisor && services.rcon && services.driver && services.probe) {
     registerInstanceRoutes(app, {
       sessions: services.sessions,
@@ -196,6 +209,7 @@ export async function buildApp(
       rcon: services.rcon,
       driver: services.driver,
       probe: services.probe,
+      schedules: services.schedules,
     });
   }
 

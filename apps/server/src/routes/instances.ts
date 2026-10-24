@@ -23,6 +23,7 @@ import { toInstanceInfo } from '../services/instance-serializer';
 import type { InstanceSupervisor } from '../services/instance-supervisor';
 import type { ProbeService } from '../services/probe-service';
 import type { RconService } from '../services/rcon-service';
+import type { ScheduleService } from '../services/schedule-service';
 import { rollbackLeftovers } from '../services/restore-service';
 import { AppError } from '../utils/errors';
 
@@ -34,6 +35,7 @@ export interface InstanceRouteDeps {
   rcon: RconService;
   driver: LocalNodeDriver;
   probe: ProbeService;
+  schedules?: ScheduleService;
 }
 
 export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRouteDeps): void {
@@ -102,6 +104,7 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
     instances.delete(row, input.confirmName);
     supervisor.forget(row.id);
     rcon.invalidate(row.id);
+    deps.schedules?.forgetInstance(row.id);
     audit.record({
       userId: request.user?.id,
       action: 'instance.delete',

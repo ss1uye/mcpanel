@@ -23,6 +23,7 @@ import { RconConfigService } from './services/rcon-config-service';
 import { RconService } from './services/rcon-service';
 import { BackupService } from './services/backup-service';
 import { RestoreService } from './services/restore-service';
+import { ScheduleService } from './services/schedule-service';
 import { SettingsService } from './services/settings-service';
 import { TaskTracker } from './services/task-tracker';
 
@@ -78,6 +79,13 @@ await backups.recoverOnBoot();
 const metrics = new MetricsService({ supervisor, db: handle.db, dataDir: config.dataDir });
 const players = new PlayersService(sandbox, rcon, (instanceId) => supervisor.getStatus(instanceId).state);
 const settings = new SettingsService(handle.db);
+const schedules = new ScheduleService({
+  db: handle.db,
+  instances,
+  supervisor,
+  backups,
+  logger,
+});
 const serveStatic = config.nodeEnv === 'production';
 if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
   logger.warn({ webDistDir: config.webDistDir }, '未找到前端构建产物，请先运行 npm run build 后再启动面板');
@@ -85,12 +93,13 @@ if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
 const app = await buildApp(
   config,
   handle.db,
-  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig, players, settings, backups, restore, tasks },
+  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig, players, settings, backups, restore, tasks, schedules },
   { logger, serveStatic },
 );
 
 try {
   await app.listen({ host: config.host, port: config.port });
+schedules.start();
 } catch (error) {
   const code = (error as NodeJS.ErrnoException).code;
   if (code === 'EADDRINUSE') {
@@ -118,6 +127,7 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
     return;
   }
   shuttingDown = true;
+  schedules.stop();
   logger.info({ reason }, 'shutting down panel; Minecraft servers keep running');
   const guard = setTimeout(() => process.exit(exitCode), SHUTDOWN_TIMEOUT_MS);
   guard.unref();
