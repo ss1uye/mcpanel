@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { api } from '../src/api/client';
 import { ScheduleForm } from '../src/components/ScheduleForm';
 
 vi.mock('../src/api/client', () => ({
@@ -11,10 +12,20 @@ vi.mock('../src/api/client', () => ({
   UNAUTHORIZED_EVENT: 'mcpanel:unauthorized',
 }));
 
+beforeEach(() => {
+  (api.get as ReturnType<typeof vi.fn>).mockResolvedValue({ nextRuns: [] });
+});
+
 function renderForm(onSubmit = vi.fn()) {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ScheduleForm open onOpenChange={() => undefined} timezone="Asia/Shanghai" onSubmit={onSubmit} />
+      <ScheduleForm
+        open
+        instanceId="instance-1"
+        onOpenChange={() => undefined}
+        timezone="Asia/Shanghai"
+        onSubmit={onSubmit}
+      />
     </QueryClientProvider>,
   );
   return onSubmit;
@@ -49,6 +60,15 @@ describe('ScheduleForm', () => {
     await user.type(screen.getByLabelText('cron 表达式'), '*/15 * * * *');
     await user.click(screen.getByRole('button', { name: '保存' }));
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ cron: '*/15 * * * *' }));
+  });
+
+  it('previews the next three runs for the current cron', async () => {
+    (api.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      nextRuns: ['2026-10-25T20:00:00.000Z', '2026-10-26T20:00:00.000Z', '2026-10-27T20:00:00.000Z'],
+    });
+    renderForm();
+    expect(await screen.findByText(/未来 3 次/)).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/schedules/preview?cron='));
   });
 
   it('requires a broadcast message for broadcast actions', async () => {

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import type { PanelSettings } from '@mcpanel/shared';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, downloadFile } from '../api/client';
 import { Button, ErrorState, Field, Input, Spinner, toast } from '../components/ui';
 
 export function SettingsPage() {
@@ -32,6 +32,15 @@ export function SettingsPage() {
       toast('密码已修改，其他会话已退出', 'success');
     },
     onError: (cause) => setPasswordError(cause instanceof ApiError ? cause.message : '修改失败'),
+  });
+
+  const downloadPanelBackup = useMutation({
+    mutationFn: async () => {
+      const compact = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+      await downloadFile('/settings/panel-backup', `panel-${compact}.db`);
+    },
+    onSuccess: () => toast('面板数据快照已下载', 'success'),
+    onError: (cause) => toast(cause instanceof ApiError ? cause.message : '下载失败', 'error'),
   });
 
   const submitPassword = (event: FormEvent) => {
@@ -150,6 +159,25 @@ export function SettingsPage() {
           </Button>
         </div>
       </form>
+
+      <div className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+        <div>
+          <h2 className="font-semibold">面板数据备份</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            下载账号、会话、审计与设置的一致性快照。快照不包含 .env 与 secret.key；恢复时需停止面板，替换
+            data/panel.db 后重启。
+          </p>
+        </div>
+        <div>
+          <Button
+            variant="secondary"
+            loading={downloadPanelBackup.isPending}
+            onClick={() => downloadPanelBackup.mutate()}
+          >
+            下载面板数据库快照
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

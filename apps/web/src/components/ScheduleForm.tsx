@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import type { ScheduleActionType, ScheduleInfo } from '@mcpanel/shared';
+import { api } from '../api/client';
+import { formatDateTime } from '../utils/format';
 import { Button, Dialog, Field, Input, Select } from './ui';
 
 const PRESETS = [
@@ -29,12 +32,14 @@ export interface ScheduleFormValue {
 }
 
 export function ScheduleForm({
+  instanceId,
   open,
   onOpenChange,
   timezone,
   initial,
   onSubmit,
 }: {
+  instanceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   timezone: string;
@@ -51,6 +56,21 @@ export function ScheduleForm({
   const [command, setCommand] = useState(initial?.command ?? '');
   const [message, setMessage] = useState(initial?.message ?? '');
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const [debounced, setDebounced] = useState({ cron, zone });
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced({ cron, zone }), 300);
+    return () => clearTimeout(timer);
+  }, [cron, zone]);
+
+  const preview = useQuery({
+    queryKey: ['schedule-preview', instanceId, debounced.cron, debounced.zone],
+    queryFn: () =>
+      api.get<{ nextRuns: string[] }>(
+        `/instances/${instanceId}/schedules/preview?cron=${encodeURIComponent(debounced.cron)}&timezone=${encodeURIComponent(debounced.zone)}`,
+      ),
+    enabled: open && debounced.cron.trim().length > 0 && debounced.zone.trim().length > 0,
+    retry: false,
+  });
 
   const missingPayload =
     (actionType === 'command' && command.trim().length === 0) ||
@@ -123,6 +143,15 @@ export function ScheduleForm({
         <Field label="cron 表达式" hint="分 时 日 月 周，例如 0 4 * * *">
           <Input value={cron} readOnly={preset !== 'custom'} onChange={(event) => setCron(event.target.value)} />
         </Field>
+        {debounced.cron.trim().length > 0 && debounced.zone.trim().length > 0 && (
+          <div className="text-xs text-[var(--muted)]" aria-live="polite">
+            {preview.isError
+              ? 'cron 表达式或时区无效'
+              : preview.data
+                ? `未来 3 次：${preview.data.nextRuns.map((iso) => formatDateTime(iso)).join(' · ')}`
+                : '正在计算未来运行时间…'}
+          </div>
+        )}
         {actionType === 'command' && (
           <Field label="命令">
             <Input value={command} maxLength={1000} onChange={(event) => setCommand(event.target.value)} />

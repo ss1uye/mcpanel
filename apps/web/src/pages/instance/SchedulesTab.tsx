@@ -131,6 +131,11 @@ export function SchedulesTab() {
                   {schedule.cron} · {schedule.timezone} · 下次 {formatDateTime(schedule.nextRunAt)} · 上次{' '}
                   {formatDateTime(schedule.lastRunAt)}
                 </div>
+                {schedule.enabled && schedule.nextRuns.length > 0 && (
+                  <div className="text-xs text-[var(--muted)]">
+                    未来：{schedule.nextRuns.map((iso) => formatDateTime(iso)).join(' · ')}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 <Button variant="ghost" onClick={() => toggle.mutate(schedule)}>
@@ -166,6 +171,7 @@ export function SchedulesTab() {
 
       <ScheduleForm
         key={`${editing?.id ?? 'new'}-${formOpen}`}
+        instanceId={instance.id}
         open={formOpen}
         onOpenChange={(open) => {
           setFormOpen(open);

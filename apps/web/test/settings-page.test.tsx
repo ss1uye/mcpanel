@@ -1,13 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api } from '../src/api/client';
+import { api, downloadFile } from '../src/api/client';
 import { SettingsPage } from '../src/pages/SettingsPage';
 
 vi.mock('../src/api/client', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() },
   ApiError: class ApiError extends Error {},
+  downloadFile: vi.fn().mockResolvedValue(undefined),
   clearCsrfToken: vi.fn(),
   UNAUTHORIZED_EVENT: 'mcpanel:unauthorized',
 }));
@@ -48,5 +49,14 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('button', { name: '修改密码' }));
     expect(api.post).not.toHaveBeenCalled();
     expect(await screen.findByText('两次输入的新密码不一致')).toBeInTheDocument();
+  });
+
+  it('downloads a panel database snapshot', async () => {
+    renderPage();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: '下载面板数据库快照' }));
+    await waitFor(() => {
+      expect(downloadFile).toHaveBeenCalledWith('/settings/panel-backup', expect.stringMatching(/^panel-.*\.db$/));
+    });
   });
 });
