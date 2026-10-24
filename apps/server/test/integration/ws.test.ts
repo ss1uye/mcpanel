@@ -14,6 +14,7 @@ import { AuditService } from '../../src/services/audit-service';
 import { InstanceService } from '../../src/services/instance-service';
 import { insertInstanceRow, insertUser } from '../helpers/factory';
 import { MetricsService } from '../../src/services/metrics-service';
+import { TaskTracker } from '../../src/services/task-tracker';
 import { ProbeService } from '../../src/services/probe-service';
 import { RconService } from '../../src/services/rcon-service';
 import type { InstanceSupervisor } from '../../src/services/instance-supervisor';
@@ -65,6 +66,7 @@ async function makeApp() {
     db: ctx.db,
     dataDir: ctx.dir,
   });
+  const tasks = new TaskTracker();
   const sandbox = new PathSandbox(ctx.dir);
   app = await buildApp(
     config,
@@ -79,12 +81,13 @@ async function makeApp() {
       driver: new LocalNodeDriver(sandbox),
       probe: new ProbeService(sandbox, async () => null),
       instances: new InstanceService(ctx.db, ctx.dir),
+      tasks,
     },
     { logger: silentLogger() },
   );
   await app.listen({ port: 0, host: '127.0.0.1' });
   const address = app.server.address() as AddressInfo;
-  return { app, instance, supervisor, metrics, token, url: `ws://127.0.0.1:${address.port}/api/ws`, httpOrigin: `http://127.0.0.1:${address.port}` };
+  return { app, instance, supervisor, metrics, tasks, token, url: `ws://127.0.0.1:${address.port}/api/ws`, httpOrigin: `http://127.0.0.1:${address.port}` };
 }
 
 function connect(url: string, headers: Record<string, string>): Promise<TestSocket> {
@@ -252,5 +255,21 @@ describe('WebSocket hub', () => {
     expect(ok.statusCode).toBe(200);
     expect(json<{ cpuPercent: number }>(ok).cpuPercent).toBe(1);
     expect(httpOrigin).toContain('127.0.0.1');
+  });
+
+  it('streams task updates to subscribers and rejects unknown tasks', { timeout: 20000 }, async () => {
+    const { tasks, token, url, httpOrigin } = await makeApp();
+    const headers = { cookie: `mcpanel_session=${token}`, origin: httpOrigin };
+    const socket = await connect(url, headers);
+
+    socket.send({ type: 'subscribe', channel: `task:${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}` });
+    expect(await socket.nextOfType('error')).toMatchObject({ code: 'NOT_FOUND' });
+
+    const task = tasks.start('backup', 'instance-1');
+    socket.send({ type: 'subscribe', channel: `task:${task.id}` });
+    await expect(socket.nextOfType('task.update')).resolves.toMatchObject({ task: { id: task.id, status: 'running' } });
+
+    tasks.finish(task.id, 'success', '备份完成');
+    await expect(socket.nextOfType('task.update')).resolves.toMatchObject({ task: { id: task.id, status: 'success' } });
   });
 });

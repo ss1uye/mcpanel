@@ -16,6 +16,7 @@ import type { DB } from './db/client';
 import { silentLogger } from './logger';
 import { registerAuditRoutes } from './routes/audit';
 import { registerAuthRoutes } from './routes/auth';
+import { registerBackupRoutes } from './routes/backups';
 import { registerConfigRoutes } from './routes/config';
 import { registerFileRoutes } from './routes/files';
 import { registerInstanceRoutes } from './routes/instances';
@@ -26,6 +27,7 @@ import { registerSystemRoutes } from './routes/system';
 import type { LocalNodeDriver } from './nodes/local-driver';
 import type { PathSandbox } from './nodes/path-sandbox';
 import type { AuditService } from './services/audit-service';
+import type { BackupService } from './services/backup-service';
 import type { FileService } from './services/file-service';
 import type { InstanceService } from './services/instance-service';
 import type { InstanceSupervisor } from './services/instance-supervisor';
@@ -34,7 +36,9 @@ import type { MetricsService } from './services/metrics-service';
 import type { ProbeService } from './services/probe-service';
 import type { RconConfigService } from './services/rcon-config-service';
 import type { RconService } from './services/rcon-service';
+import type { RestoreService } from './services/restore-service';
 import type { SettingsService } from './services/settings-service';
+import type { TaskTracker } from './services/task-tracker';
 import { AppError } from './utils/errors';
 import { WsHub } from './ws/hub';
 
@@ -53,6 +57,9 @@ export interface AppServices {
   rconConfig?: RconConfigService;
   players?: PlayersService;
   settings?: SettingsService;
+  backups?: BackupService;
+  restore?: RestoreService;
+  tasks?: TaskTracker;
 }
 
 export interface BuildAppOptions {
@@ -192,6 +199,16 @@ export async function buildApp(
     });
   }
 
+  if (services.instances && services.backups && services.restore) {
+    registerBackupRoutes(app, {
+      sessions: services.sessions,
+      audit: services.audit,
+      instances: services.instances,
+      backups: services.backups,
+      restore: services.restore,
+    });
+  }
+
   if (services.instances && services.files) {
     registerFileRoutes(app, {
       sessions: services.sessions,
@@ -232,12 +249,13 @@ export async function buildApp(
   }
 
   let hub: WsHub | null = null;
-  if (services.metrics && services.supervisor) {
+  if (services.metrics && services.supervisor && services.tasks) {
     hub = new WsHub({
       db,
       sessions: services.sessions,
       supervisor: services.supervisor,
       metrics: services.metrics,
+      tasks: services.tasks,
     });
     hub.register(app);
     registerSystemRoutes(app, { sessions: services.sessions, metrics: services.metrics });

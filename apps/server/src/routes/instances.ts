@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import { createReadStream } from 'node:fs';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import {
   consoleCommandSchema,
@@ -21,6 +23,7 @@ import { toInstanceInfo } from '../services/instance-serializer';
 import type { InstanceSupervisor } from '../services/instance-supervisor';
 import type { ProbeService } from '../services/probe-service';
 import type { RconService } from '../services/rcon-service';
+import { rollbackLeftovers } from '../services/restore-service';
 import { AppError } from '../utils/errors';
 
 export interface InstanceRouteDeps {
@@ -135,6 +138,31 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
     withInstance(request.params.id);
     await supervisor.markStopped(request.params.id);
     return reply.status(202).send({ state: supervisor.getStatus(request.params.id).state });
+  });
+
+  app.get<{ Params: { id: string } }>('/api/instances/:id/restore-leftovers', read, async (request) => ({
+    paths: await rollbackLeftovers(instances.get(request.params.id).rootPath),
+  }));
+
+  app.post<{ Params: { id: string } }>('/api/instances/:id/actions/cleanup-restore', write, async (request, reply) => {
+    const row = instances.get(request.params.id);
+    const state = supervisor.getStatus(row.id).state;
+    if (!['stopped', 'unknown', 'crashed'].includes(state)) {
+      throw new AppError('INVALID_STATE', '只有在停止或异常状态下才能清理恢复残留');
+    }
+    const input = deleteInstanceSchema.parse(request.body);
+    if (input.confirmName !== row.name) {
+      throw new AppError('VALIDATION_ERROR', '确认名称与实例名称不一致', { field: 'confirmName' });
+    }
+    await fsp.rm(path.join(row.rootPath, '.mcpanel-tmp'), { recursive: true, force: true });
+    audit.record({
+      userId: request.user?.id,
+      action: 'instance.cleanup_restore',
+      targetType: 'instance',
+      targetId: row.id,
+      ip: request.ip,
+    });
+    return reply.status(204).send();
   });
 
   app.get<{ Params: { id: string }; Querystring: { lines?: string } }>('/api/instances/:id/logs', read, async (request) => {

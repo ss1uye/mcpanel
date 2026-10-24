@@ -15,6 +15,7 @@ import type { DB } from '../db/client';
 import { instances } from '../db/schema';
 import type { InstanceSupervisor } from '../services/instance-supervisor';
 import type { MetricsService } from '../services/metrics-service';
+import type { TaskTracker } from '../services/task-tracker';
 import { AppError } from '../utils/errors';
 
 const MAX_BUFFERED_BYTES = 1024 * 1024;
@@ -33,6 +34,7 @@ export interface WsHubDeps {
   sessions: SessionService;
   supervisor: InstanceSupervisor;
   metrics: MetricsService;
+  tasks: TaskTracker;
 }
 
 export class WsHub {
@@ -46,6 +48,7 @@ export class WsHub {
       this.publishNotification(notification),
     );
     deps.metrics.setSink((message) => this.publishMetrics(message));
+    deps.tasks.setSink((task) => this.publishTask(task));
   }
 
   register(app: FastifyInstance): void {
@@ -134,6 +137,14 @@ export class WsHub {
     return this.clients.size;
   }
 
+  publishTask(task: import('@mcpanel/shared').TaskInfo): void {
+    const channel = `task:${task.id}`;
+    for (const conn of this.clients.values()) {
+      if (!conn.subscriptions.has(channel)) continue;
+      this.send(conn, { type: 'task.update', task });
+    }
+  }
+
   private attach(socket: WebSocket): void {
     const conn: ClientConn = { socket, subscriptions: new Set(), lastSeen: Date.now(), dropped: new Map() };
     this.clients.set(socket, conn);
@@ -184,7 +195,13 @@ export class WsHub {
       }
     }
     if (parts[0] === 'task') {
-      this.send(conn, { type: 'error', code: 'FORBIDDEN', message: '任务频道将在阶段 3 提供' });
+      const task = this.deps.tasks.get(parts[1]!);
+      if (!task) {
+        this.send(conn, { type: 'error', code: 'NOT_FOUND', message: '任务不存在或已过期' });
+        return;
+      }
+      conn.subscriptions.add(message.channel);
+      this.send(conn, { type: 'task.update', task });
       return;
     }
     conn.subscriptions.add(message.channel);
@@ -194,6 +211,11 @@ export class WsHub {
   }
 
   private async sendInitial(conn: ClientConn, channel: string, sinceSeq?: number): Promise<void> {
+    if (channel.startsWith('task:')) {
+      const task = this.deps.tasks.get(channel.slice(5));
+      if (task) this.send(conn, { type: 'task.update', task });
+      return;
+    }
     if (channel === 'system:metrics') {
       const latest = this.deps.metrics.getLatestSystem();
       if (latest) this.send(conn, { type: 'metrics.sample', target: 'system', ts: latest.ts, sample: latest });

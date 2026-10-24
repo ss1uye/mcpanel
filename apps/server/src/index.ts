@@ -21,7 +21,10 @@ import { PlayersService } from './services/players-service';
 import { ProbeService } from './services/probe-service';
 import { RconConfigService } from './services/rcon-config-service';
 import { RconService } from './services/rcon-service';
+import { BackupService } from './services/backup-service';
+import { RestoreService } from './services/restore-service';
 import { SettingsService } from './services/settings-service';
+import { TaskTracker } from './services/task-tracker';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -51,6 +54,27 @@ const supervisor = new InstanceSupervisor({ db: handle.db, driver, rcon, audit, 
 
 await supervisor.init();
 
+const tasks = new TaskTracker();
+const backups = new BackupService({
+  db: handle.db,
+  dataDir: config.dataDir,
+  instances,
+  supervisor,
+  rcon,
+  tasks,
+  logger,
+});
+const restore = new RestoreService({
+  db: handle.db,
+  dataDir: config.dataDir,
+  backups,
+  tasks,
+  audit,
+  logger,
+  stateOf: (instanceId) => supervisor.getStatus(instanceId).state,
+});
+await backups.recoverOnBoot();
+
 const metrics = new MetricsService({ supervisor, db: handle.db, dataDir: config.dataDir });
 const players = new PlayersService(sandbox, rcon, (instanceId) => supervisor.getStatus(instanceId).state);
 const settings = new SettingsService(handle.db);
@@ -61,7 +85,7 @@ if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
 const app = await buildApp(
   config,
   handle.db,
-  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig, players, settings },
+  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig, players, settings, backups, restore, tasks },
   { logger, serveStatic },
 );
 
