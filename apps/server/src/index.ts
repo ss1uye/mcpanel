@@ -17,6 +17,7 @@ import { FileService } from './services/file-service';
 import { InstanceService } from './services/instance-service';
 import { InstanceSupervisor } from './services/instance-supervisor';
 import { MetricsService } from './services/metrics-service';
+import { PanelBackupService } from './services/panel-backup-service';
 import { PlayersService } from './services/players-service';
 import { ProbeService } from './services/probe-service';
 import { RconConfigService } from './services/rcon-config-service';
@@ -86,6 +87,7 @@ for (const [instanceId, message] of restoreLeftovers) {
 const metrics = new MetricsService({ supervisor, db: handle.db, dataDir: config.dataDir });
 const players = new PlayersService(sandbox, rcon, (instanceId) => supervisor.getStatus(instanceId).state);
 const settings = new SettingsService(handle.db);
+const panelBackup = new PanelBackupService({ sqlite: handle.sqlite, dataDir: config.dataDir });
 const schedules = new ScheduleService({
   db: handle.db,
   instances,
@@ -101,7 +103,7 @@ if (serveStatic && !fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
 const app = await buildApp(
   config,
   handle.db,
-  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig, players, settings, backups, restore, tasks, schedules },
+  { sessions, audit, loginThrottle: new LoginThrottle(), instances, supervisor, rcon, driver, probe, metrics, files, sandbox, rconConfig, players, settings, panelBackup, backups, restore, tasks, schedules },
   { logger, serveStatic },
 );
 

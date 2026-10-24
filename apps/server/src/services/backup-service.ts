@@ -18,6 +18,7 @@ import type { InstanceSupervisor } from './instance-supervisor';
 import { loadServerProperties, propertyValue } from './properties-service';
 import type { RconService } from './rcon-service';
 import type { TaskTracker } from './task-tracker';
+import { stamp } from '../utils/stamp';
 
 export interface BackupServiceDeps {
   db: DB;
@@ -31,11 +32,6 @@ export interface BackupServiceDeps {
 }
 
 const LEVEL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-
-function stamp(date: Date): string {
-  const compact = date.toISOString().replace(/[-:T]/g, '').slice(0, 14);
-  return `${compact.slice(0, 8)}-${compact.slice(8)}`;
-}
 
 function toInfo(row: typeof backups.$inferSelect): BackupInfo {
   return {

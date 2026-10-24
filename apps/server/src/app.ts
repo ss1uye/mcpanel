@@ -32,6 +32,7 @@ import type { BackupService } from './services/backup-service';
 import type { FileService } from './services/file-service';
 import type { InstanceService } from './services/instance-service';
 import type { InstanceSupervisor } from './services/instance-supervisor';
+import type { PanelBackupService } from './services/panel-backup-service';
 import type { PlayersService } from './services/players-service';
 import type { MetricsService } from './services/metrics-service';
 import type { ProbeService } from './services/probe-service';
@@ -59,6 +60,7 @@ export interface AppServices {
   rconConfig?: RconConfigService;
   players?: PlayersService;
   settings?: SettingsService;
+  panelBackup?: PanelBackupService;
   backups?: BackupService;
   restore?: RestoreService;
   tasks?: TaskTracker;
@@ -187,7 +189,12 @@ export async function buildApp(
   registerAuditRoutes(app, { sessions: services.sessions, audit: services.audit });
 
   if (services.settings) {
-    registerSettingsRoutes(app, { sessions: services.sessions, audit: services.audit, settings: services.settings });
+    registerSettingsRoutes(app, {
+      sessions: services.sessions,
+      audit: services.audit,
+      settings: services.settings,
+      panelBackup: services.panelBackup,
+    });
   }
 
   if (services.instances && services.schedules && services.settings) {
