@@ -6,6 +6,7 @@ import { PANEL_VERSION, type PanelSettings } from '@mcpanel/shared';
 import { api, clearCsrfToken } from '../api/client';
 import { disconnectRealtime, useConnectionState, useRealtime } from '../stores/realtime';
 import { useUi } from '../stores/ui';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Badge, Button, Spinner, Toaster } from '../components/ui';
 import { cn } from '../utils/cn';
 
@@ -135,7 +136,9 @@ export function AppShell() {
               </div>
             }
           >
-            <Outlet />
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
           </Suspense>
         </main>
       </div>

@@ -47,13 +47,16 @@ export function ConsoleViewer({
   });
 
   const scrollToLatest = () => {
-    const element = parentRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (filtered.length > 0) virtualizer.scrollToIndex(filtered.length - 1, { align: 'end' });
   };
 
+  // Depend on the newest line's seq, not the array length: the store caps lines
+  // at MAX_LINES, so once the cap is reached new lines no longer change the
+  // length and a length-based effect would silently stop following.
+  const lastSeq = filtered.at(-1)?.seq;
   useEffect(() => {
     if (follow) scrollToLatest();
-  }, [follow, filtered.length]);
+  }, [follow, lastSeq]);
 
   const handleScroll = () => {
     const element = parentRef.current;

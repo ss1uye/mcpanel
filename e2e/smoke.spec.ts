@@ -6,6 +6,11 @@ test('init, onboard, run, back up and restore', async ({ page }) => {
   page.on('console', (message) => {
     if (message.text().includes('Content Security Policy')) cspViolations.push(message.text());
   });
+  // The streaming download uses the native save picker, which headless
+  // automation cannot drive; force the blob fallback so the download event fires.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'showSaveFilePicker', { value: undefined });
+  });
 
   await page.goto('/setup');
   await page.getByLabel('密码', { exact: true }).fill(ADMIN_PASSWORD);
@@ -17,7 +22,8 @@ test('init, onboard, run, back up and restore', async ({ page }) => {
   await page.getByRole('button', { name: '纳管实例' }).click();
   await page.getByLabel('服务器目录').fill(INSTANCE_ROOT);
   await page.getByRole('button', { name: '检测目录' }).click();
-  await expect(page.getByText('start.bat')).toBeVisible({ timeout: 15_000 });
+  const startScript = process.platform === 'win32' ? 'start.bat' : 'start.sh';
+  await expect(page.getByText(startScript)).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: '创建实例' }).click();
   await expect(page.getByRole('heading', { name: 'instance' })).toBeVisible({ timeout: 20_000 });
 

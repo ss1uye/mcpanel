@@ -68,9 +68,20 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return (await response.json()) as T;
 }
 
-/** Downloads through a blob URL so an expired session cannot replace the SPA with a JSON page. */
-export async function downloadFile(path: string, filename: string): Promise<void> {
-  const response = await fetch(`/api${path}`, { credentials: 'same-origin' });
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options: { suggestedName: string }) => Promise<{
+    createWritable(): Promise<WritableStream<Uint8Array>>;
+  }>;
+};
+
+/**
+ * Downloads via fetch so an expired session yields a handled 401 instead of a
+ * JSON page replacing the SPA. Large bodies (multi-GB backups) stream straight
+ * to disk when the File System Access API is available; buffering them into a
+ * blob would freeze the tab.
+ */
+export async function downloadFile(path: string, filename: string, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(`/api${path}`, { credentials: 'same-origin', signal });
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as ApiErrorBody | null;
     if (response.status === 401) {
@@ -83,6 +94,28 @@ export async function downloadFile(path: string, filename: string): Promise<void
       response.status,
     );
   }
+
+  const body = response.body;
+  const picker = (window as unknown as SaveFilePickerWindow).showSaveFilePicker;
+  if (body && picker) {
+    let streaming = false;
+    try {
+      const file = await picker({ suggestedName: filename });
+      const writable = await file.createWritable();
+      streaming = true;
+      await body.pipeTo(writable, { signal });
+      return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        // User dismissed the save dialog or cancelled the download; discard the stream.
+        await body.cancel().catch(() => undefined);
+        return;
+      }
+      if (streaming) throw error;
+      // Picker unusable before any data flowed (e.g. lost user activation) — fall through.
+    }
+  }
+
   const url = URL.createObjectURL(await response.blob());
   const anchor = document.createElement('a');
   anchor.href = url;

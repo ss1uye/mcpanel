@@ -50,6 +50,9 @@ export function CommandInput({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    // An IME commit fires keydown Enter/Arrow keys with isComposing set; those
+    // belong to the candidate window, not the console.
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'Enter') {
       event.preventDefault();
       void send();
