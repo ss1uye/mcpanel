@@ -31,6 +31,7 @@ const tabs = [
   { to: 'console', label: '控制台' },
   { to: 'players', label: '玩家' },
   { to: 'files', label: '文件' },
+  { to: 'config', label: '配置' },
   { to: 'settings', label: '设置' },
 ];
 

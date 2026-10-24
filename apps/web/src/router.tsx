@@ -10,6 +10,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { InstancesPage } from './pages/InstancesPage';
 import { LoginPage } from './pages/LoginPage';
 import { SetupPage } from './pages/SetupPage';
+import { ConfigTab } from './pages/instance/ConfigTab';
 import { ConsoleTab } from './pages/instance/ConsoleTab';
 import { FilesTab } from './pages/instance/FilesTab';
 import { InstanceSettingsTab } from './pages/instance/InstanceSettingsTab';
@@ -59,6 +60,7 @@ export function AppRouter() {
           <Route path="console" element={<ConsoleTab />} />
           <Route path="players" element={<PlayersTab />} />
           <Route path="files" element={<FilesTab />} />
+          <Route path="config" element={<ConfigTab />} />
           <Route path="settings" element={<InstanceSettingsTab />} />
         </Route>
       </Route>
