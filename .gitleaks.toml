@@ -1,0 +1,16 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test-only credentials and documentation examples"
+paths = [
+  '''^docs/superpowers/''',
+  '''^e2e/''',
+  '''^apps/server/test/''',
+]
+regexes = [
+  '''E2e-Password-2026''',
+  '''longpassword12''',
+  # RCON password character set, not a credential.
+  '''ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789''',
+]
