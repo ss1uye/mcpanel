@@ -1,8 +1,9 @@
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearRuntime, isPidAlive, readRuntime, stopOrphan, writeRuntime } from '../src/runtime';
+import { clearRuntime, isPidAlive, isPortOpen, readRuntime, stopOrphan, writeRuntime } from '../src/runtime';
 
 const dirs: string[] = [];
 function temp(): string {
@@ -55,6 +56,18 @@ describe('runtime metadata', () => {
 
   it('clears a missing runtime file without throwing', () => {
     expect(() => clearRuntime(path.join(temp(), 'missing.json'))).not.toThrow();
+  });
+});
+
+describe('isPortOpen', () => {
+  it('detects a listening loopback port', async () => {
+    const server = net.createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+    await expect(isPortOpen(port)).resolves.toBe(true);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await expect(isPortOpen(port)).resolves.toBe(false);
   });
 });
 

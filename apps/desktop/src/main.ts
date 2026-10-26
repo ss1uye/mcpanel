@@ -10,7 +10,7 @@ import { pipeline } from 'node:stream/promises';
 import { createTray } from './tray';
 import { ServerProcess, type ServerStartInfo } from './server-process';
 import { loadPreferences, savePreferences, type Preferences } from './preferences';
-import { clearRuntime, isPidAlive, readRuntime, stopOrphan, writeRuntime } from './runtime';
+import { clearRuntime, isPidAlive, isPortOpen, readRuntime, stopOrphan, writeRuntime } from './runtime';
 import { resolveDesktopPaths, resolveLoginItemPath, resolveUserDataDir } from './paths';
 import { importPanelData, isPanelDataDir } from './data-import';
 
@@ -204,7 +204,7 @@ async function run(userDataDir: string): Promise<void> {
         await startServerWithRetry();
         await mainWindow?.loadURL(panelOrigin);
       } else if (result.response === 1) {
-        await shell.openPath(paths.desktopLogFile);
+        await shell.openPath(paths.desktopLogFile).catch(() => undefined);
       } else {
         app.quit();
       }
@@ -322,16 +322,10 @@ async function run(userDataDir: string): Promise<void> {
       if (picked.canceled || !picked.filePath) return { canceled: true };
       let partPath = '';
       try {
-        const response = await event.sender.session.fetch(parsed.toString(), { credentials: 'include' });
-        let finalOrigin = parsed.origin;
-        try {
-          finalOrigin = new URL(response.url).origin;
-        } catch {
-          // Some responses do not expose a URL; the request origin remains authoritative.
-        }
-        if (finalOrigin !== panelOrigin) {
-          return { error: { code: 'FORBIDDEN', message: '下载重定向到非面板来源', status: 403 } };
-        }
+        const response = await event.sender.session.fetch(parsed.toString(), {
+          credentials: 'include',
+          redirect: 'error',
+        });
         if (!response.ok) {
           const data = (await response.json().catch(() => null)) as {
             error?: { code?: string; message?: string };
@@ -411,8 +405,13 @@ async function run(userDataDir: string): Promise<void> {
 
   await app.whenReady();
   app.setAppUserModelId('com.ss1uye.mcpanel');
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  const allowedPermissions = new Set(['clipboard-read', 'clipboard-sanitized-write']);
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => {
+    callback(allowedPermissions.has(permission));
+  });
+  session.defaultSession.setPermissionCheckHandler((_contents, permission) =>
+    allowedPermissions.has(permission),
+  );
   applyLoginItem();
   sweepSmokeDirs();
 
@@ -434,13 +433,14 @@ async function run(userDataDir: string): Promise<void> {
         }
       }
     }
-    if (!stopped && isPidAlive(orphan.pid)) {
+    if (!stopped && isPidAlive(orphan.pid) && (await isPortOpen(orphan.port))) {
       keepRuntimeOnQuit = true;
+      exitCode = 1;
       await dialog.showMessageBox({
         type: 'error',
         title: 'MC Panel',
         message: '旧面板进程仍在运行',
-        detail: `PID ${orphan.pid} 仍在运行，但健康检查未通过。请先在任务管理器中结束它，或重启电脑后再试。`,
+        detail: `PID ${orphan.pid} 仍在监听 ${orphan.port}，但健康检查未通过。请先在任务管理器中结束它，或重启电脑后再试。`,
       });
       app.quit();
       return;

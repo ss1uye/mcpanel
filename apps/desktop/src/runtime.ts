@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 
 export interface RuntimeInfo {
@@ -46,6 +47,22 @@ export function clearRuntime(file: string): void {
   } catch {
     // already gone
   }
+}
+
+export function isPortOpen(port: number, timeoutMs = 1_000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    let settled = false;
+    const finish = (open: boolean): void => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(open);
+    };
+    socket.setTimeout(timeoutMs, () => finish(false));
+    socket.once('connect', () => finish(true));
+    socket.once('error', () => finish(false));
+  });
 }
 
 export function isPidAlive(pid: number): boolean {
