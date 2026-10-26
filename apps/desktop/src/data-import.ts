@@ -48,7 +48,7 @@ export async function importPanelData(source: string, target: string): Promise<v
   try {
     await fsp.cp(sourceDir, staging, { recursive: true, force: false, errorOnExist: true, dereference: true });
     if (emptyTarget) {
-      await fsp.rm(targetDir);
+      await fsp.rm(targetDir, { recursive: true, force: false });
       removedEmptyTarget = true;
     }
     await fsp.rename(staging, targetDir);
