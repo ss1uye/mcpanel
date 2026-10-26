@@ -1,4 +1,4 @@
-export const PANEL_VERSION = '0.3.1';
+export const PANEL_VERSION = '0.4.0';
 export const SESSION_COOKIE = 'mcpanel_session';
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const CONSOLE_BUFFER_SIZE = 5000;
