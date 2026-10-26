@@ -91,11 +91,19 @@ interface DesktopBridge {
  */
 export async function downloadFile(path: string, filename: string, signal?: AbortSignal): Promise<void> {
   const desktop = (window as unknown as { mcpanelDesktop?: DesktopBridge }).mcpanelDesktop;
-  if (desktop) {
-    const result = await desktop.saveFile({
-      url: new URL(`/api${path}`, window.location.origin).toString(),
-      filename,
-    });
+  if (desktop && typeof desktop.saveFile === 'function') {
+    let result: DesktopBridgeResult;
+    try {
+      result = await desktop.saveFile({
+        url: new URL(`/api${path}`, window.location.origin).toString(),
+        filename,
+      });
+    } catch (error) {
+      throw new ApiError('DOWNLOAD_FAILED', error instanceof Error ? error.message : '下载失败', 500);
+    }
+    if (!result || typeof result !== 'object') {
+      throw new ApiError('DOWNLOAD_FAILED', '下载失败', 500);
+    }
     if (result.error) {
       if (result.error.status === 401) {
         clearCsrfToken();

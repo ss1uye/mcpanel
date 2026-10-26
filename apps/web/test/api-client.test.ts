@@ -125,6 +125,16 @@ describe('api client', () => {
     window.removeEventListener('mcpanel:unauthorized', listener);
   });
 
+  it('wraps desktop bridge rejections in ApiError', async () => {
+    (window as unknown as { mcpanelDesktop: unknown }).mcpanelDesktop = {
+      saveFile: vi.fn().mockRejectedValue(new Error('ipc down')),
+    };
+    const error = await downloadFile('/instances/x/logs/download', 'latest.log').catch((cause) => cause);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe('DOWNLOAD_FAILED');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('returns quietly when the desktop save dialog is canceled', async () => {
     const saveFile = vi.fn().mockResolvedValue({ canceled: true });
     (window as unknown as { mcpanelDesktop: { saveFile: typeof saveFile } }).mcpanelDesktop = { saveFile };
