@@ -131,10 +131,17 @@ console.log('[package] collecting runtime dependencies...');
 const dependencyCount = await runtimeDependencies();
 
 console.log('[package] creating zip...');
-execFileSync('tar.exe', ['-a', '-c', '-f', path.basename(zipPath), folderName], {
-  cwd: releaseRoot,
-  stdio: 'inherit',
-});
+const psQuote = (value) => `'${value.replaceAll("'", "''")}'`;
+execFileSync(
+  'powershell.exe',
+  [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `Compress-Archive -LiteralPath ${psQuote(staging)} -DestinationPath ${psQuote(zipPath)} -Force`,
+  ],
+  { stdio: 'inherit' },
+);
 
 const hash = createHash('sha256');
 await new Promise((resolve, reject) => {

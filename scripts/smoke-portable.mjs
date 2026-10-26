@@ -16,10 +16,17 @@ if (!fs.existsSync(zipPath)) throw new Error(`找不到便携包：${zipPath}（
 
 await fsp.rm(smokeRoot, { recursive: true, force: true });
 await fsp.mkdir(smokeRoot, { recursive: true });
-execFileSync('tar.exe', ['-xf', path.basename(zipPath), '-C', 'smoke'], {
-  cwd: path.dirname(zipPath),
-  stdio: 'inherit',
-});
+const psQuote = (value) => `'${value.replaceAll("'", "''")}'`;
+execFileSync(
+  'powershell.exe',
+  [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `Expand-Archive -LiteralPath ${psQuote(zipPath)} -DestinationPath ${psQuote(smokeRoot)} -Force`,
+  ],
+  { stdio: 'inherit' },
+);
 
 const appDir = path.join(smokeRoot, folderName);
 if (!fs.existsSync(path.join(appDir, 'node', 'node.exe'))) throw new Error('便携包缺少 node/node.exe');

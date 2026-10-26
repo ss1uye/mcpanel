@@ -27,7 +27,7 @@
   - 复制 `apps/server/dist`、`apps/server/drizzle`、`apps/web/dist`、`package.json`、`apps/server/package.json`、`.env.example`、`LICENSE`、打包模板；
   - `process.execPath` → `node/node.exe`；
   - `npm ls --omit=dev --all --parseable --workspace=@mcpanel/server` → 复制生产依赖（跳过 `@mcpanel` 工作区链接）；
-  - `tar.exe -a -c -f` 生成 ZIP，Node crypto 生成 `SHA256SUMS.txt`。
+  - PowerShell `Compress-Archive` 生成 ZIP，Node crypto 生成 `SHA256SUMS.txt`。
 - [ ] 编写 `start-panel.bat`：首次复制 `.env.example`、读取 host/port、2 秒后打开 Edge、前台运行内置 node、退出后 pause。
 - [ ] 运行 `npm run release:portable`，检查 ZIP 结构与大小，确认无 `.env`/`data/`/测试文件。
 
@@ -36,7 +36,7 @@
 **Files:**
 - Create: `scripts/smoke-portable.mjs`
 
-- [ ] 解压 ZIP 到 `release/smoke/`；
+- [ ] 用 PowerShell `Expand-Archive` 解压 ZIP 到 `release/smoke/`；
 - [ ] 写临时 `.env`（随机端口、`DATA_DIR=./data-smoke`、`PANEL_HOST=127.0.0.1`）；
 - [ ] 用包内 `node/node.exe` 启动；
 - [ ] 轮询 health、检查 `/` HTML；

@@ -68,7 +68,7 @@ mcpanel-0.3.0-win-x64/
 5. 复制 `process.execPath` 为 `node/node.exe`，复制 Node LICENSE；
 6. 通过 `npm ls --omit=dev --all --parseable --workspace=@mcpanel/server` 找出服务端生产依赖，
    跳过 `@mcpanel/*` 工作区链接，按相对 `node_modules` 路径复制；
-7. 用系统 `tar.exe -a -c -f` 生成 ZIP；
+7. 用 PowerShell `Compress-Archive` 生成 ZIP（避免 PATH 中的 tar 实现差异）；
 8. 用 Node `crypto` 生成 `SHA256SUMS.txt`；
 9. 打印 ZIP 路径与大小。
 
@@ -78,7 +78,7 @@ npm 脚本：`npm run release:portable` = `npm run build && node scripts/package
 
 `scripts/smoke-portable.mjs`：
 
-1. 解压生成的 ZIP 到 `release/smoke/`；
+1. 用 PowerShell `Expand-Archive` 解压生成的 ZIP 到 `release/smoke/`；
 2. 写入临时 `.env`（随机端口、`DATA_DIR=./data-smoke`、`PANEL_HOST=127.0.0.1`）；
 3. 用包内 `node/node.exe` 启动 `apps/server/dist/index.js`；
 4. 轮询 `/api/health`，断言 `ok: true` 且版本为当前版本；
