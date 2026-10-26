@@ -92,7 +92,7 @@ describe('ServerProcess', () => {
     });
   });
 
-  it('kills the child when health never passes', async () => {
+  it('kills the child when health never passes without emitting a crash', async () => {
     const child = new FakeChild();
     const spawned = fakeSpawn(child);
     const server = new ServerProcess({
@@ -100,14 +100,52 @@ describe('ServerProcess', () => {
       waitHealth: async () => false,
       spawnFn: spawned.spawnFn,
     });
+    const exits = vi.fn();
+    server.on('exit', exits);
 
     await expect(server.start()).rejects.toThrow(/启动失败/);
     expect(child.kill).toHaveBeenCalled();
+    expect(exits).not.toHaveBeenCalled();
     expect(server.pid).toBeNull();
     expect(server.port).toBeNull();
   });
 
-  it('sends shutdown and resolves after exit', async () => {
+  it('rejects a spawn error quickly and resets the object', async () => {
+    const child = new FakeChild();
+    Object.defineProperty(child, 'pid', { value: undefined });
+    const spawned = fakeSpawn(child);
+    const server = new ServerProcess({
+      ...options,
+      waitHealth: async () => true,
+      spawnFn: spawned.spawnFn,
+    });
+    setTimeout(() => child.emit('error', new Error('spawn ENOENT')), 10);
+
+    await expect(server.start()).rejects.toThrow(/无法启动面板服务/);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(server.pid).toBeNull();
+    expect(server.port).toBeNull();
+  });
+
+  it('rejects a child that exits before startup completes', async () => {
+    const child = new FakeChild();
+    const spawned = fakeSpawn(child);
+    const server = new ServerProcess({
+      ...options,
+      waitHealth: async () => new Promise<boolean>(() => undefined),
+      spawnFn: spawned.spawnFn,
+    });
+    setTimeout(() => {
+      child.exitCode = 1;
+      child.emit('exit', 1);
+    }, 10);
+
+    await expect(server.start()).rejects.toThrow(/启动完成前退出/);
+    expect(server.pid).toBeNull();
+    expect(server.port).toBeNull();
+  });
+
+  it('rejects a second start while running', async () => {
     const child = new FakeChild();
     const spawned = fakeSpawn(child);
     const server = new ServerProcess({
@@ -116,12 +154,45 @@ describe('ServerProcess', () => {
       spawnFn: spawned.spawnFn,
     });
     await server.start();
+    await expect(server.start()).rejects.toThrow(/已在运行/);
+  });
+
+  it('emits exit only for an unexpected running exit', async () => {
+    const child = new FakeChild();
+    const spawned = fakeSpawn(child);
+    const server = new ServerProcess({
+      ...options,
+      waitHealth: async () => true,
+      spawnFn: spawned.spawnFn,
+    });
+    await server.start();
+    const exits = vi.fn();
+    server.on('exit', exits);
+
+    child.exitCode = 1;
+    child.emit('exit', 1);
+    expect(exits).toHaveBeenCalledWith(1);
+    expect(server.pid).toBeNull();
+  });
+
+  it('sends shutdown and resolves after exit without emitting a crash', async () => {
+    const child = new FakeChild();
+    const spawned = fakeSpawn(child);
+    const server = new ServerProcess({
+      ...options,
+      waitHealth: async () => true,
+      spawnFn: spawned.spawnFn,
+    });
+    await server.start();
+    const exits = vi.fn();
+    server.on('exit', exits);
 
     const stopping = server.stop(500);
     expect(child.send).toHaveBeenCalledWith('shutdown');
     child.exitCode = 0;
     child.emit('exit', 0);
     await expect(stopping).resolves.toBeUndefined();
+    expect(exits).not.toHaveBeenCalled();
     expect(server.pid).toBeNull();
     expect(server.port).toBeNull();
   });
