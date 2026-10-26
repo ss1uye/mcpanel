@@ -49,6 +49,14 @@ describe('importPanelData', () => {
     expect(stagingEntries(target)).toEqual([]);
   });
 
+  it('rejects a target directory whose name merely starts with two dots', async () => {
+    const source = temp();
+    fs.writeFileSync(path.join(source, 'panel.db'), 'db');
+    const target = path.join(source, '..data');
+    fs.mkdirSync(target);
+    await expect(importPanelData(source, target)).rejects.toThrow(/目标目录不能位于源目录内/);
+  });
+
   it('rejects a directory without panel.db', async () => {
     await expect(importPanelData(temp(), path.join(temp(), 'data'))).rejects.toThrow(/panel\.db/);
   });

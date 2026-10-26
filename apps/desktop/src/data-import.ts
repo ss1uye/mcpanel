@@ -13,7 +13,7 @@ export function isPanelDataDir(dir: string): boolean {
 
 function isInside(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+  return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
 async function isEmptyDir(dir: string): Promise<boolean> {
@@ -48,7 +48,7 @@ export async function importPanelData(source: string, target: string): Promise<v
   try {
     await fsp.cp(sourceDir, staging, { recursive: true, force: false, errorOnExist: true, dereference: true });
     if (emptyTarget) {
-      await fsp.rmdir(targetDir);
+      await fsp.rm(targetDir);
       removedEmptyTarget = true;
     }
     await fsp.rename(staging, targetDir);
