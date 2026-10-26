@@ -13,3 +13,4 @@ playwright-report/
 *.tsbuildinfo
 data-e2e/
 e2e/.tmp/
+release/

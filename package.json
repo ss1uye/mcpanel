@@ -1,6 +1,6 @@
 {
   "name": "mcpanel",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "packageManager": "npm@11.19.1",
@@ -19,7 +19,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "test": "npm run test --workspaces --if-present",
-    "test:e2e": "node scripts/clean-e2e.mjs && playwright test"
+    "test:e2e": "node scripts/clean-e2e.mjs && playwright test",
+    "release:portable": "npm run build && node scripts/package-portable.mjs",
+    "smoke:portable": "node scripts/smoke-portable.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
