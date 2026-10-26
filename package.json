@@ -21,7 +21,13 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "node scripts/clean-e2e.mjs && playwright test",
     "release:portable": "npm run build && node scripts/package-portable.mjs",
-    "smoke:portable": "node scripts/smoke-portable.mjs"
+    "smoke:portable": "node scripts/smoke-portable.mjs",
+    "desktop:payload": "node scripts/prepare-desktop-payload.mjs",
+    "desktop:build": "npm run build -w @mcpanel/desktop",
+    "desktop:package": "npm run build && npm run desktop:payload && npm run desktop:build && npm run package -w @mcpanel/desktop",
+    "smoke:desktop": "node scripts/smoke-desktop.mjs",
+    "test:e2e:desktop": "playwright test --config playwright.desktop.config.ts",
+    "release:desktop": "npm run desktop:package && npm run test:e2e:desktop && npm run smoke:desktop && node scripts/release-checksums.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -29,6 +35,7 @@
     "@types/node": "^24.0.0",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
+    "png-to-ico": "^3.0.2",
     "tsup": "^9.0.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",

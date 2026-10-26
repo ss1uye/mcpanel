@@ -3,6 +3,9 @@
   "version": "0.4.0",
   "private": true,
   "productName": "MC Panel",
+  "description": "MC Panel desktop shell",
+  "author": "ss1uye",
+  "license": "MIT",
   "type": "module",
   "main": "dist/main.cjs",
   "scripts": {
@@ -12,7 +15,7 @@
     "package": "electron-builder --win nsis portable --x64 --config electron-builder.yml"
   },
   "devDependencies": {
-    "electron": "^45.0.0",
+    "electron": "45.0.0",
     "electron-builder": "^26.18.0",
     "vitest": "^5.0.5"
   }

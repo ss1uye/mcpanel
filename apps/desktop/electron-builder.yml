@@ -1,0 +1,32 @@
+appId: com.ss1uye.mcpanel
+productName: MC Panel
+directories:
+  output: ../../release/desktop
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+extraResources:
+  - from: build/server
+    to: server
+  - from: build/icon.png
+    to: icon.png
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+  artifactName: MC-Panel-Setup-${version}.exe
+portable:
+  artifactName: MC-Panel-${version}-portable.exe
+publish: null

@@ -14,6 +14,7 @@ const version = pkg.version;
 const folderName = `mcpanel-${version}-win-x64`;
 const staging = path.join(releaseRoot, folderName);
 const zipPath = path.join(releaseRoot, `${folderName}.zip`);
+const noZip = process.argv.includes('--no-zip');
 
 if (process.platform !== 'win32') throw new Error('便携包目前只支持 Windows x64');
 if (Number(process.versions.node.split('.')[0]) !== 24) {
@@ -131,6 +132,11 @@ await copyFile(path.join(repoRoot, 'packaging/licenses/node-LICENSE.txt'), path.
 
 console.log('[package] collecting runtime dependencies...');
 const dependencyCount = await runtimeDependencies();
+
+if (noZip) {
+  console.log(`Server payload: ${staging}`);
+  process.exit(0);
+}
 
 console.log('[package] creating zip...');
 const output = createWriteStream(zipPath);
