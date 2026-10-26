@@ -69,7 +69,8 @@ export async function stopOrphan(info: RuntimeInfo, deps: OrphanDeps = {}): Prom
   try {
     kill(info.pid);
   } catch {
-    return false;
+    // The process may have exited between the health check and the signal (ESRCH), or the signal may be
+    // refused; fall through and let the liveness wait loop decide instead of reporting a false negative.
   }
   for (let attempt = 0; attempt < 10; attempt += 1) {
     if (!isAlive(info.pid)) return true;
