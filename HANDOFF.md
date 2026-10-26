@@ -105,6 +105,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
   `static`（ubuntu：typecheck + lint）、`test`（ubuntu + windows 矩阵：test + build；Windows 额外打包/冒烟便携包）、
   `e2e`（ubuntu：Playwright Chromium）、`secret-scan`（gitleaks 全历史）。
 - 发布：`.github/workflows/release.yml`，`v*` tag 或手动触发，在 Windows 上构建便携 ZIP、冒烟、上传 artifact；tag 时创建 GitHub Release（ZIP + SHA256SUMS）。
+- 已发布 v0.3.0：https://github.com/ss1uye/mcpanel/releases/tag/v0.3.0（tag 指向 `212b5b8`，ZIP 57,099,945 bytes，SHA256 `c6daa52129cfd1bc8dabec8656bfac7fb7e0c0d2c5515cef0186998d151e86a7`）。
 - 密钥扫描：`.gitleaks.toml`；测试/文档中的已知测试凭据通过白名单排除。
 - 仓库描述与 topics 需在 GitHub 网页设置（API 写入需要 token，本项目只用 SSH）。
 
