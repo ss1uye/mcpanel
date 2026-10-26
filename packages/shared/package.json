@@ -3,11 +3,14 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants": "./src/constants.ts"
+  },
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": { "zod": "^3.25.0" }
+  "dependencies": { "zod": "^4.6.7" }
 }
