@@ -16,10 +16,19 @@ const isSmoke = process.argv.includes('--smoke-test');
 const smokeExit = process.argv.includes('--smoke-exit');
 const startHidden = process.argv.includes('--hidden');
 
+const userDataDir = resolveUserDataDir({
+  portableExecutableDir: process.env.PORTABLE_EXECUTABLE_DIR,
+  appDataDir: app.getPath('appData'),
+  smokeTest: isSmoke,
+  tempDir: os.tmpdir(),
+  pid: process.pid,
+});
+app.setPath('userData', userDataDir);
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  void run().catch((error: unknown) => {
+  void run(userDataDir).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     void app.whenReady().then(() => {
       dialog.showErrorBox('MC Panel 启动失败', message);
@@ -28,15 +37,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-async function run(): Promise<void> {
-  const userDataDir = resolveUserDataDir({
-    portableExecutableDir: process.env.PORTABLE_EXECUTABLE_DIR,
-    appDataDir: app.getPath('appData'),
-    smokeTest: isSmoke,
-    tempDir: os.tmpdir(),
-    pid: process.pid,
-  });
-  app.setPath('userData', userDataDir);
+async function run(userDataDir: string): Promise<void> {
   const paths = resolveDesktopPaths(userDataDir);
   const iconPath = app.isPackaged
     ? path.join(process.resourcesPath, 'icon.png')
