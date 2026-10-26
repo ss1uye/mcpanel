@@ -29,6 +29,10 @@ export function resolveUserDataDir(input: UserDataInput): string {
   return path.join(input.appDataDir, 'MC Panel');
 }
 
+export function resolveLoginItemPath(env: NodeJS.ProcessEnv, execPath: string): string {
+  return env.PORTABLE_EXECUTABLE_FILE || execPath;
+}
+
 export function resolveDesktopPaths(userDataDir: string): DesktopPaths {
   const dataDir = path.join(userDataDir, 'data');
   return {

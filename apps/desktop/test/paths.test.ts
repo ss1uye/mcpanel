@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveDesktopPaths, resolveUserDataDir } from '../src/paths';
+import { resolveDesktopPaths, resolveLoginItemPath, resolveUserDataDir } from '../src/paths';
 
 describe('desktop paths', () => {
   it('uses the portable data directory next to the exe', () => {
@@ -60,6 +60,15 @@ describe('desktop paths', () => {
       pid: 42,
     };
     expect(resolveUserDataDir(input)).not.toBe(resolveUserDataDir(input));
+  });
+
+  it('uses the portable executable for the login item when present', () => {
+    expect(
+      resolveLoginItemPath({ PORTABLE_EXECUTABLE_FILE: 'D:\\MC Panel.exe' }, 'C:\\Temp\\electron.exe'),
+    ).toBe('D:\\MC Panel.exe');
+    expect(resolveLoginItemPath({}, 'C:\\Program Files\\MC Panel\\MC Panel.exe')).toBe(
+      'C:\\Program Files\\MC Panel\\MC Panel.exe',
+    );
   });
 
   it('derives data, preferences, runtime and log paths', () => {

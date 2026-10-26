@@ -16,17 +16,22 @@ export interface TrayOptions {
 }
 
 export function createTray(options: TrayOptions): Tray {
-  const tray = new Tray(nativeImage.createFromPath(options.iconPath));
+  const image = nativeImage.createFromPath(options.iconPath);
+  if (image.isEmpty()) throw new Error(`托盘图标缺失：${options.iconPath}`);
+  const tray = new Tray(image);
   tray.setToolTip('MC Panel');
 
   const refresh = (): void => {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: '打开面板', click: options.showWindow },
-        { label: '在浏览器中打开', click: () => void shell.openExternal(options.getPanelUrl()) },
+        {
+          label: '在浏览器中打开',
+          click: () => void shell.openExternal(options.getPanelUrl()).catch(() => undefined),
+        },
         { type: 'separator' },
-        { label: '打开数据目录', click: () => void shell.openPath(options.dataDir) },
-        { label: '打开日志目录', click: () => void shell.openPath(options.logDir) },
+        { label: '打开数据目录', click: () => void shell.openPath(options.dataDir).catch(() => undefined) },
+        { label: '打开日志目录', click: () => void shell.openPath(options.logDir).catch(() => undefined) },
         { type: 'separator' },
         {
           label: '开机自启',

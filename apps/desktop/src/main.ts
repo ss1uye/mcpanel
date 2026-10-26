@@ -1,6 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
 import type { Tray } from 'electron';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -8,8 +10,8 @@ import { pipeline } from 'node:stream/promises';
 import { createTray } from './tray';
 import { ServerProcess, type ServerStartInfo } from './server-process';
 import { loadPreferences, savePreferences, type Preferences } from './preferences';
-import { clearRuntime, readRuntime, stopOrphan, writeRuntime } from './runtime';
-import { resolveDesktopPaths, resolveUserDataDir } from './paths';
+import { clearRuntime, isPidAlive, readRuntime, stopOrphan, writeRuntime } from './runtime';
+import { resolveDesktopPaths, resolveLoginItemPath, resolveUserDataDir } from './paths';
 import { importPanelData, isPanelDataDir } from './data-import';
 
 const isSmoke = process.argv.includes('--smoke-test');
@@ -66,7 +68,7 @@ async function run(userDataDir: string): Promise<void> {
     } catch {
       // Logging must never take the shell down.
     }
-    if (!app.isPackaged) console.log(message);
+    if (!app.isPackaged || isSmoke) console.log(message);
   };
 
   const sweepSmokeDirs = (): void => {
@@ -102,8 +104,21 @@ async function run(userDataDir: string): Promise<void> {
   };
 
   const applyLoginItem = (): void => {
-    if (!app.isPackaged) return;
-    app.setLoginItemSettings({ openAtLogin: preferences.autoLaunch, args: ['--hidden'] });
+    if (!app.isPackaged || isSmoke) return;
+    app.setLoginItemSettings({
+      path: resolveLoginItemPath(process.env, process.execPath),
+      openAtLogin: preferences.autoLaunch,
+      args: ['--hidden'],
+    });
+  };
+
+  const persistPreferences = (next: Preferences): void => {
+    preferences = next;
+    try {
+      savePreferences(paths.preferencesFile, next);
+    } catch (error) {
+      log(`preferences save failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
 
   const ensureData = async (): Promise<boolean> => {
@@ -221,10 +236,17 @@ async function run(userDataDir: string): Promise<void> {
     });
     mainWindow.setMenuBarVisibility(false);
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+      if (/^https?:\/\//i.test(url)) void shell.openExternal(url).catch(() => undefined);
       return { action: 'deny' };
     });
     mainWindow.webContents.on('will-navigate', (event, url) => {
+      try {
+        if (new URL(url).origin !== panelOrigin) event.preventDefault();
+      } catch {
+        event.preventDefault();
+      }
+    });
+    mainWindow.webContents.on('will-redirect', (event, url) => {
       try {
         if (new URL(url).origin !== panelOrigin) event.preventDefault();
       } catch {
@@ -260,14 +282,12 @@ async function run(userDataDir: string): Promise<void> {
       logDir: path.dirname(paths.desktopLogFile),
       getAutoLaunch: () => preferences.autoLaunch,
       setAutoLaunch: (enabled) => {
-        preferences = { ...preferences, autoLaunch: enabled };
-        savePreferences(paths.preferencesFile, preferences);
+        persistPreferences({ ...preferences, autoLaunch: enabled });
         applyLoginItem();
       },
       getMinimizeToTray: () => preferences.minimizeToTray,
       setMinimizeToTray: (enabled) => {
-        preferences = { ...preferences, minimizeToTray: enabled };
-        savePreferences(paths.preferencesFile, preferences);
+        persistPreferences({ ...preferences, minimizeToTray: enabled });
       },
       quit: () => app.quit(),
     });
@@ -300,8 +320,18 @@ async function run(userDataDir: string): Promise<void> {
         ? await dialog.showSaveDialog(mainWindow, { defaultPath: path.basename(filename) })
         : await dialog.showSaveDialog({ defaultPath: path.basename(filename) });
       if (picked.canceled || !picked.filePath) return { canceled: true };
+      let partPath = '';
       try {
         const response = await event.sender.session.fetch(parsed.toString(), { credentials: 'include' });
+        let finalOrigin = parsed.origin;
+        try {
+          finalOrigin = new URL(response.url).origin;
+        } catch {
+          // Some responses do not expose a URL; the request origin remains authoritative.
+        }
+        if (finalOrigin !== panelOrigin) {
+          return { error: { code: 'FORBIDDEN', message: '下载重定向到非面板来源', status: 403 } };
+        }
         if (!response.ok) {
           const data = (await response.json().catch(() => null)) as {
             error?: { code?: string; message?: string };
@@ -317,14 +347,17 @@ async function run(userDataDir: string): Promise<void> {
         if (!response.body) {
           return { error: { code: 'DOWNLOAD_FAILED', message: '响应为空', status: 502 } };
         }
+        partPath = `${picked.filePath}.part-${randomUUID()}`;
         await pipeline(
           Readable.fromWeb(
             response.body as unknown as import('node:stream/web').ReadableStream<Uint8Array>,
           ),
-          fs.createWriteStream(picked.filePath),
+          fs.createWriteStream(partPath),
         );
+        await fsp.rename(partPath, picked.filePath);
         return { canceled: false, filePath: picked.filePath };
       } catch (error) {
+        if (partPath) await fsp.rm(partPath, { force: true }).catch(() => undefined);
         return {
           error: {
             code: 'DOWNLOAD_FAILED',
@@ -365,10 +398,13 @@ async function run(userDataDir: string): Promise<void> {
           }
         }
       } finally {
-        tray?.destroy();
-        tray = null;
-        mainWindow?.destroy();
-        app.exit(exitCode);
+        try {
+          tray?.destroy();
+          tray = null;
+          mainWindow?.destroy();
+        } finally {
+          app.exit(exitCode);
+        }
       }
     })();
   });
@@ -376,6 +412,7 @@ async function run(userDataDir: string): Promise<void> {
   await app.whenReady();
   app.setAppUserModelId('com.ss1uye.mcpanel');
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
   applyLoginItem();
   sweepSmokeDirs();
 
@@ -387,14 +424,23 @@ async function run(userDataDir: string): Promise<void> {
 
   const orphan = readRuntime(paths.runtimeFile);
   if (orphan) {
-    const stopped = await stopOrphan(orphan, { health: probeHealth });
-    if (!stopped && (await probeHealth(orphan.port))) {
+    let stopped = await stopOrphan(orphan, { health: probeHealth });
+    if (!stopped) {
+      for (let attempt = 0; attempt < 3 && isPidAlive(orphan.pid); attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (await probeHealth(orphan.port)) {
+          stopped = await stopOrphan(orphan, { health: probeHealth });
+          break;
+        }
+      }
+    }
+    if (!stopped && isPidAlive(orphan.pid)) {
       keepRuntimeOnQuit = true;
       await dialog.showMessageBox({
         type: 'error',
         title: 'MC Panel',
-        message: '旧面板仍在运行',
-        detail: `面板端口 ${orphan.port} 仍有响应。请先在任务管理器中结束旧面板进程，或重启电脑后再试。`,
+        message: '旧面板进程仍在运行',
+        detail: `PID ${orphan.pid} 仍在运行，但健康检查未通过。请先在任务管理器中结束它，或重启电脑后再试。`,
       });
       app.quit();
       return;
