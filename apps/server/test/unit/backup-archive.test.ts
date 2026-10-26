@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeBackupArchive } from '../../src/services/backup-archive';
+import { planBackupSources } from '../../src/services/backup-sources';
 import { extractZipSafe } from '../../src/utils/zip-extract';
 
 const dirs: string[] = [];
@@ -51,6 +52,46 @@ describe('writeBackupArchive', () => {
     expect(await fs.readFile(path.join(out, 'world', 'level.dat'), 'utf8')).toBe('level');
     expect(await fs.readFile(path.join(out, 'server.properties'), 'utf8')).toBe('motd=hi');
     await expect(fs.stat(path.join(out, 'logs', 'latest.log'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await fs.stat(path.join(out, 'config'))).isDirectory()).toBe(true);
+  });
+
+  it('uses a precomputed entry list instead of walking the tree again', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcpanel-archive-'));
+    dirs.push(dir);
+    const root = path.join(dir, 'server');
+    await fs.mkdir(path.join(root, 'world'), { recursive: true });
+    await fs.writeFile(path.join(root, 'world', 'level.dat'), 'level');
+    await fs.mkdir(path.join(root, 'config'));
+    const plan = await planBackupSources(root, {
+      levelName: 'world',
+      includeMods: false,
+      includeConfig: true,
+      extraPaths: [],
+    });
+    // A file created after planning must not sneak in via a second tree walk.
+    await fs.writeFile(path.join(root, 'world', 'late.dat'), 'late');
+
+    const archive = path.join(dir, 'backup.zip');
+    await writeBackupArchive({
+      root,
+      sources: plan.sources,
+      destination: archive,
+      manifest: {
+        schemaVersion: 1,
+        panelVersion: '0.1.0',
+        instanceName: 'x',
+        createdAt: '2026-10-26T00:00:00.000Z',
+        sources: plan.sources,
+        fileCount: plan.fileCount,
+        totalBytes: plan.totalBytes,
+      },
+      entries: { files: plan.files, directories: plan.directories },
+    });
+
+    const out = path.join(dir, 'out');
+    await extractZipSafe(archive, out);
+    expect(await fs.readFile(path.join(out, 'world', 'level.dat'), 'utf8')).toBe('level');
+    await expect(fs.stat(path.join(out, 'world', 'late.dat'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect((await fs.stat(path.join(out, 'config'))).isDirectory()).toBe(true);
   });
 });

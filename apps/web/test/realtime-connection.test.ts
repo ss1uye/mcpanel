@@ -126,6 +126,34 @@ describe('realtime channel references', () => {
     expect(useToastStore.getState().items.map((item) => item.message)).toContain('进程未被面板接管');
   });
 
+  it('closes a connection that stops receiving heartbeats', () => {
+    vi.useFakeTimers();
+    try {
+      subscribeChannel('system:metrics');
+      const socket = FakeWebSocket.instances[0]!;
+      socket.emit('open', {});
+      vi.advanceTimersByTime(80_000);
+      expect(socket.readyState).toBe(FakeWebSocket.CLOSED);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the connection while server messages keep arriving', () => {
+    vi.useFakeTimers();
+    try {
+      subscribeChannel('system:metrics');
+      const socket = FakeWebSocket.instances[0]!;
+      socket.emit('open', {});
+      vi.advanceTimersByTime(60_000);
+      socket.emit('message', { data: JSON.stringify({ type: 'pong' }) });
+      vi.advanceTimersByTime(30_000);
+      expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ignores a late close from a superseded socket', () => {
     subscribeChannel('instance:a:console');
     const stale = FakeWebSocket.instances[0]!;

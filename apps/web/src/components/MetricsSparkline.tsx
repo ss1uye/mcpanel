@@ -1,18 +1,32 @@
-import { Line, LineChart, ResponsiveContainer, YAxis } from 'recharts';
+const VIEW_WIDTH = 100;
+const PADDING = 2;
 
 export function MetricsSparkline({ values, height = 40 }: { values: number[]; height?: number }) {
-  const data = values.map((value, index) => ({ index, value }));
-  if (data.length < 2) {
+  if (values.length < 2) {
     return <div className="flex h-10 items-center text-xs text-[var(--muted)]">等待采样…</div>;
   }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  const usableHeight = Math.max(1, height - PADDING * 2);
+  const points = values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * VIEW_WIDTH;
+      const y = span === 0 ? height / 2 : height - PADDING - ((value - min) / span) * usableHeight;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
   return (
     <div style={{ height }} aria-hidden="true">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-          <YAxis hide domain={['dataMin', 'dataMax']} />
-          <Line type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-        </LineChart>
-      </ResponsiveContainer>
+      <svg className="h-full w-full" viewBox={`0 0 ${VIEW_WIDTH} ${height}`} preserveAspectRatio="none" role="presentation">
+        <polyline
+          points={points}
+          fill="none"
+          stroke="var(--primary)"
+          strokeWidth={1.5}
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
     </div>
   );
 }

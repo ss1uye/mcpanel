@@ -5,11 +5,18 @@ import { ZipArchive } from 'archiver';
 import type { BackupManifest } from '@mcpanel/shared';
 import { DEFAULT_EXCLUDES } from './backup-sources';
 
+export interface ArchiveEntries {
+  files: string[];
+  directories: string[];
+}
+
 export interface ArchiveOptions {
   root: string;
   sources: string[];
   destination: string;
   manifest: BackupManifest;
+  /** Reuse a planBackupSources() result to avoid walking the tree twice. */
+  entries?: ArchiveEntries;
   onProgress?: (fraction: number) => void;
 }
 
@@ -44,9 +51,14 @@ async function collectFiles(
 export async function writeBackupArchive(options: ArchiveOptions): Promise<number> {
   const files: string[] = [];
   const directories: string[] = [];
-  for (const source of options.sources) {
-    if (excluded(source)) continue;
-    await collectFiles(options.root, source, files, directories);
+  if (options.entries) {
+    for (const rel of options.entries.files) if (!excluded(rel)) files.push(rel);
+    for (const rel of options.entries.directories) if (!excluded(rel)) directories.push(rel);
+  } else {
+    for (const source of options.sources) {
+      if (excluded(source)) continue;
+      await collectFiles(options.root, source, files, directories);
+    }
   }
 
   await fs.mkdir(path.dirname(options.destination), { recursive: true });

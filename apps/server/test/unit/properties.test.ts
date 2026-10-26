@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearServerPropertiesCache,
   loadServerProperties,
   MAX_PROPERTIES_FILE_BYTES,
   parsePort,
@@ -44,6 +45,43 @@ describe('properties', () => {
     expect(parsePort('65536', 25565)).toBe(25565);
     expect(parsePort('70000', 25575)).toBe(25575);
     expect(parsePort('', 25565)).toBe(25565);
+  });
+
+  it('reuses the parsed file until its metadata changes', async () => {
+    const root = await temp();
+    const file = path.join(root, 'server.properties');
+    await fs.writeFile(file, 'level-name=world\n');
+
+    const first = await loadServerProperties(root);
+    expect(propertyValue(first?.parsed ?? null, 'level-name')).toBe('world');
+
+    const read = vi.spyOn(fs, 'readFile');
+    try {
+      const cached = await loadServerProperties(root);
+      expect(propertyValue(cached?.parsed ?? null, 'level-name')).toBe('world');
+      expect(read).not.toHaveBeenCalled();
+    } finally {
+      read.mockRestore();
+    }
+
+    await fs.writeFile(file, 'level-name=nether\n');
+    const updated = await loadServerProperties(root);
+    expect(propertyValue(updated?.parsed ?? null, 'level-name')).toBe('nether');
+  });
+
+  it('re-reads after the panel invalidates the cache', async () => {
+    const root = await temp();
+    await fs.writeFile(path.join(root, 'server.properties'), 'level-name=world\n');
+    await loadServerProperties(root);
+
+    const read = vi.spyOn(fs, 'readFile');
+    try {
+      clearServerPropertiesCache();
+      await loadServerProperties(root);
+      expect(read).toHaveBeenCalledTimes(1);
+    } finally {
+      read.mockRestore();
+    }
   });
 
   it('returns null when server.properties is missing', async () => {

@@ -209,6 +209,24 @@ describe('WebSocket hub', () => {
     expect(await socket.nextOfType('notification')).toMatchObject({ type: 'notification', level: 'warning' });
   });
 
+  it('batches console lines emitted in the same window', { timeout: 20000 }, async () => {
+    const { instance, supervisor, token, url, httpOrigin } = await makeApp();
+    const socket = await connect(url, { cookie: `mcpanel_session=${token}`, origin: httpOrigin });
+    await socket.next();
+
+    socket.send({ type: 'subscribe', channel: `instance:${instance.id}:console` });
+    expect(await socket.next()).toMatchObject({ type: 'console.snapshot' });
+
+    const first: ConsoleLine = { seq: 1, ts: new Date().toISOString(), stream: 'stdout', level: 'info', text: 'one' };
+    const second: ConsoleLine = { seq: 2, ts: new Date().toISOString(), stream: 'stdout', level: 'info', text: 'two' };
+    supervisor.emit('console', instance.id, [first]);
+    supervisor.emit('console', instance.id, [second]);
+
+    const frame = await socket.nextOfType('console.append');
+    expect(frame.lines).toEqual([first, second]);
+    await expect(socket.nextOrNothing(200)).resolves.toBeUndefined();
+  });
+
   it('rejects unknown channels, missing instances and unauthenticated sockets', async () => {
     const { instance, token, url, httpOrigin } = await makeApp();
     const socket = await connect(url, { cookie: `mcpanel_session=${token}`, origin: httpOrigin });

@@ -103,7 +103,7 @@ export function registerInstanceRoutes(app: FastifyInstance, deps: InstanceRoute
     const row = instances.get(request.params.id);
     if (supervisor.isBusy(row.id)) throw new AppError('OPERATION_IN_PROGRESS', '实例仍有操作在执行，请稍后再删除');
     deps.schedules?.forgetInstance(row.id);
-    instances.delete(row, input.confirmName);
+    await instances.delete(row, input.confirmName);
     supervisor.forget(row.id);
     rcon.invalidate(row.id);
     audit.record({

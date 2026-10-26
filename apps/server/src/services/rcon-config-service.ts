@@ -6,7 +6,12 @@ import { AppError } from '../utils/errors';
 import { writeFileAtomic } from '../utils/fs-atomic';
 import type { InstanceService } from './instance-service';
 import { patchProperties } from './properties-patch';
-import { loadServerProperties, parsePort, propertyValue } from './properties-service';
+import {
+  clearServerPropertiesCache,
+  loadServerProperties,
+  parsePort,
+  propertyValue,
+} from './properties-service';
 import type { RconService } from './rcon-service';
 
 const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -55,6 +60,7 @@ export class RconConfigService {
     });
     const file = await this.sandbox.resolve(row.rootPath, 'server.properties');
     await writeFileAtomic(file, next);
+    clearServerPropertiesCache();
     this.rcon.invalidate(row.id);
     return { port, password };
   }

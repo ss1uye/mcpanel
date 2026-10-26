@@ -9,6 +9,7 @@ import type { PathSandbox } from '../nodes/path-sandbox';
 import { AppError } from '../utils/errors';
 import { writeFileAtomic } from '../utils/fs-atomic';
 import { extractZipSafe } from '../utils/zip-extract';
+import { clearServerPropertiesCache } from './properties-service';
 
 export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 const MAX_ZIP_ENTRIES = 100_000;
@@ -46,20 +47,26 @@ export class FileService {
     if (dirStat.isSymbolicLink()) throw new AppError('SYMLINK_NOT_ALLOWED', '不允许访问符号链接');
     if (!dirStat.isDirectory()) throw new AppError('VALIDATION_ERROR', '目标不是目录');
     const entries: FileEntryInfo[] = [];
-    for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-      if (entry.name === '.mcpanel-tmp') continue;
-      const absolute = path.join(dir, entry.name);
-      const stat = await fs.lstat(absolute);
-      const ext = path.extname(entry.name).toLowerCase();
-      const isFile = stat.isFile();
-      entries.push({
-        name: entry.name,
-        type: stat.isDirectory() ? 'directory' : 'file',
-        size: stat.size,
-        mtime: stat.mtime.toISOString(),
-        symlink: stat.isSymbolicLink(),
-        editable: isFile && stat.size <= MAX_TEXT_BYTES && !BINARY_EXTENSIONS.has(ext),
-      });
+    const names = (await fs.readdir(dir, { withFileTypes: true })).filter((entry) => entry.name !== '.mcpanel-tmp');
+    const statBatch = 64;
+    for (let index = 0; index < names.length; index += statBatch) {
+      const batch = await Promise.all(
+        names.slice(index, index + statBatch).map(async (entry) => {
+          const absolute = path.join(dir, entry.name);
+          const stat = await fs.lstat(absolute);
+          const ext = path.extname(entry.name).toLowerCase();
+          const isFile = stat.isFile();
+          return {
+            name: entry.name,
+            type: stat.isDirectory() ? ('directory' as const) : ('file' as const),
+            size: stat.size,
+            mtime: stat.mtime.toISOString(),
+            symlink: stat.isSymbolicLink(),
+            editable: isFile && stat.size <= MAX_TEXT_BYTES && !BINARY_EXTENSIONS.has(ext),
+          };
+        }),
+      );
+      entries.push(...batch);
     }
     entries.sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'directory' ? -1 : 1));
     const normalized = this.sandbox.normalizeRelative(relPath);
@@ -90,6 +97,7 @@ export class FileService {
       throw new AppError('MTIME_CONFLICT', '文件已被外部修改');
     }
     await writeFileAtomic(file, content);
+    clearServerPropertiesCache();
     return { mtime: (await fs.stat(file)).mtimeMs };
   }
 
@@ -123,6 +131,7 @@ export class FileService {
     );
     if (exists) throw new AppError('VALIDATION_ERROR', '同名文件或目录已存在');
     await fs.rename(source, target);
+    clearServerPropertiesCache();
     return { path: `/${nextRel}` };
   }
 
@@ -134,6 +143,7 @@ export class FileService {
     if (stat.isSymbolicLink()) throw new AppError('SYMLINK_NOT_ALLOWED', '不允许删除符号链接');
     if (stat.isDirectory() && !recursive) throw new AppError('VALIDATION_ERROR', '删除目录需要递归确认');
     await fs.rm(target, { recursive, force: false });
+    clearServerPropertiesCache();
   }
 
   async download(root: string, relPath: string): Promise<{ file: string; name: string; size: number }> {
@@ -183,6 +193,7 @@ export class FileService {
         createWriteStream(temp),
       );
       await fs.rename(temp, target);
+      clearServerPropertiesCache();
     } catch (error) {
       await fs.rm(temp, { force: true });
       throw error;
@@ -201,12 +212,16 @@ export class FileService {
       ? this.sandbox.normalizeRelative(targetDir)
       : path.posix.dirname(sourceRel) === '.' ? '' : path.posix.dirname(sourceRel);
     const destination = await this.sandbox.resolve(root, destinationRel);
-    const result = await extractZipSafe(archivePath, destination, {
-      maxEntries: MAX_ZIP_ENTRIES,
-      maxBytes: MAX_ZIP_BYTES,
-      resolveTarget: (name) => this.sandbox.resolve(root, destinationRel ? `${destinationRel}/${name}` : name),
-    });
-    return { entries: result.entries };
+    try {
+      const result = await extractZipSafe(archivePath, destination, {
+        maxEntries: MAX_ZIP_ENTRIES,
+        maxBytes: MAX_ZIP_BYTES,
+        resolveTarget: (name) => this.sandbox.resolve(root, destinationRel ? `${destinationRel}/${name}` : name),
+      });
+      return { entries: result.entries };
+    } finally {
+      clearServerPropertiesCache();
+    }
   }
 
   async toggleMod(root: string, relPath: string): Promise<{ path: string }> {

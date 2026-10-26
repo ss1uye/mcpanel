@@ -50,6 +50,7 @@ export class TaskTracker {
 
   cleanup(now = Date.now()): void {
     for (const [id, task] of this.tasks) {
+      if (task.status === 'running') continue;
       const reference = task.finishedAt ?? task.startedAt;
       if (now - new Date(reference).getTime() > MAX_AGE_MS) this.tasks.delete(id);
     }

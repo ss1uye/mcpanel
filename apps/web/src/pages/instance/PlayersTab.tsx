@@ -8,6 +8,7 @@ import { PlayerList } from '../../components/PlayerList';
 import { RconEnableDialog } from '../../components/RconEnableDialog';
 import { Button, Dialog, EmptyState, ErrorState, Field, Input, Notice, Spinner, toast } from '../../components/ui';
 import { RCON_LABELS } from '../../utils/labels';
+import { shouldPollPlayers } from '../../utils/polling';
 
 function NameList({ title, names }: { title: string; names: string[] }) {
   return (
@@ -34,16 +35,17 @@ export function PlayersTab() {
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastText, setBroadcastText] = useState('');
   const queryClient = useQueryClient();
+  const running = status.state === 'running' || status.state === 'orphaned';
 
   const players = useQuery({
     queryKey: ['players', instance.id],
     queryFn: () => api.get<PlayersResponse>(`/instances/${instance.id}/players`),
-    refetchInterval: 10_000,
+    refetchInterval: shouldPollPlayers(status.state) ? 10_000 : false,
   });
   const lists = useQuery({
     queryKey: ['player-lists', instance.id],
     queryFn: () => api.get<PlayerListsResponse>(`/instances/${instance.id}/players/lists`),
-    refetchInterval: 30_000,
+    refetchInterval: shouldPollPlayers(status.state) ? 30_000 : false,
   });
 
   const action = useMutation({
@@ -56,7 +58,6 @@ export function PlayersTab() {
   });
 
   const rconStatus = players.data?.rconStatus ?? instance.rconStatus;
-  const running = status.state === 'running' || status.state === 'orphaned';
   const online = players.data?.online ?? [];
   const canAct = running && rconStatus === 'connected';
 

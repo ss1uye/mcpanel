@@ -11,6 +11,7 @@ import { diskUsage } from '../utils/disk';
 import { AppError } from '../utils/errors';
 import { extractZipSafe } from '../utils/zip-extract';
 import type { AuditService } from './audit-service';
+import { clearServerPropertiesCache } from './properties-service';
 import type { BackupService } from './backup-service';
 import type { TaskTracker } from './task-tracker';
 
@@ -266,6 +267,7 @@ export class RestoreService {
       await fs.rm(rollbackDir, { recursive: true, force: true }).catch((error: unknown) => {
         this.deps.logger.warn({ err: error, instanceId: row.id }, 'restore rollback cleanup failed');
       });
+      clearServerPropertiesCache();
       db.update(backups).set({ status: 'ready' }).where(eq(backups.id, backupId)).run();
       this.deps.tasks.update(task.id, { progress: 1 });
       this.deps.audit.record({
@@ -277,6 +279,7 @@ export class RestoreService {
       });
       this.deps.tasks.finish(task.id, 'success', '恢复完成');
     } catch (error) {
+      clearServerPropertiesCache();
       db.update(backups).set({ status: 'ready' }).where(eq(backups.id, backupId)).run();
       const message = error instanceof AppError ? error.message : '恢复失败';
       this.deps.audit.record({

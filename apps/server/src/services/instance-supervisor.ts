@@ -118,8 +118,10 @@ export class InstanceSupervisor extends EventEmitter {
   }
 
   getStatus(instanceId: string): InstanceStatusSnapshot {
-    const row = this.readRow(instanceId);
     const state = this.runtime.get(instanceId);
+    // Runtime is seeded from the row on boot/onboarding, so a DB read is only
+    // needed for callers that arrive before the supervisor has seen the instance.
+    const row = state ? undefined : this.readRow(instanceId);
     return {
       instanceId,
       state: state?.state ?? row?.lastState ?? 'stopped',

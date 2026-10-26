@@ -14,9 +14,20 @@ export interface BackupSourceOptions {
 
 export interface BackupSourcePlan {
   sources: string[];
+  files: string[];
+  directories: string[];
   fileCount: number;
   totalBytes: number;
   skippedMissing: string[];
+}
+
+interface WalkState {
+  files: string[];
+  directories: string[];
+  seenFiles: Set<string>;
+  seenDirectories: Set<string>;
+  fileCount: number;
+  totalBytes: number;
 }
 
 function isExcluded(rel: string): boolean {
@@ -36,21 +47,28 @@ function normalizeExtra(value: string): string {
   return normalized;
 }
 
-async function walk(root: string, rel: string, totals: { fileCount: number; totalBytes: number }): Promise<void> {
+async function walk(root: string, rel: string, state: WalkState): Promise<void> {
   const absolute = path.join(root, ...rel.split('/'));
   const stat = await fs.lstat(absolute).catch(() => null);
   if (!stat || stat.isSymbolicLink()) return;
   if (stat.isDirectory()) {
-    for (const entry of await fs.readdir(absolute).catch(() => [] as string[])) {
+    const entries = await fs.readdir(absolute).catch(() => [] as string[]);
+    if (entries.length === 0 && !state.seenDirectories.has(rel)) {
+      state.seenDirectories.add(rel);
+      state.directories.push(rel);
+    }
+    for (const entry of entries) {
       const childRel = `${rel}/${entry}`;
       if (isExcluded(childRel)) continue;
-      await walk(root, childRel, totals);
+      await walk(root, childRel, state);
     }
     return;
   }
-  if (stat.isFile()) {
-    totals.fileCount += 1;
-    totals.totalBytes += stat.size;
+  if (stat.isFile() && !state.seenFiles.has(rel)) {
+    state.seenFiles.add(rel);
+    state.files.push(rel);
+    state.fileCount += 1;
+    state.totalBytes += stat.size;
   }
 }
 
@@ -76,7 +94,14 @@ export async function planBackupSources(root: string, options: BackupSourceOptio
   const sources: string[] = [];
   const skippedMissing: string[] = [];
   const seen = new Set<string>();
-  const totals = { fileCount: 0, totalBytes: 0 };
+  const state: WalkState = {
+    files: [],
+    directories: [],
+    seenFiles: new Set(),
+    seenDirectories: new Set(),
+    fileCount: 0,
+    totalBytes: 0,
+  };
 
   for (const candidate of candidates) {
     if (seen.has(candidate) || isExcluded(candidate)) continue;
@@ -91,11 +116,18 @@ export async function planBackupSources(root: string, options: BackupSourceOptio
       throw new AppError('SYMLINK_NOT_ALLOWED', `备份源包含符号链接：${candidate}`);
     }
     sources.push(candidate);
-    await walk(root, candidate, totals);
+    await walk(root, candidate, state);
   }
 
-  if (totals.fileCount === 0) {
+  if (state.fileCount === 0) {
     throw new AppError('VALIDATION_ERROR', '没有可备份的内容');
   }
-  return { sources, fileCount: totals.fileCount, totalBytes: totals.totalBytes, skippedMissing };
+  return {
+    sources,
+    files: state.files,
+    directories: state.directories,
+    fileCount: state.fileCount,
+    totalBytes: state.totalBytes,
+    skippedMissing,
+  };
 }

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import type { z } from 'zod';
@@ -73,7 +74,7 @@ export class InstanceService {
   }
 
   /** Returns the row that was removed so callers can audit it. */
-  delete(row: InstanceRow, confirmName: string): InstanceRow {
+  async delete(row: InstanceRow, confirmName: string): Promise<InstanceRow> {
     if (confirmName !== row.name) {
       throw new AppError('VALIDATION_ERROR', '确认名称与实例名称不一致', { field: 'confirmName' });
     }
@@ -84,7 +85,7 @@ export class InstanceService {
     if (leftovers.length > 0) {
       throw new AppError('INVALID_STATE', '实例存在未处理的恢复残留，请先清理');
     }
-    fs.rmSync(path.join(this.dataDir, 'backups', row.id), { recursive: true, force: true });
+    await fsp.rm(path.join(this.dataDir, 'backups', row.id), { recursive: true, force: true });
     this.db.delete(instances).where(eq(instances.id, row.id)).run();
     return row;
   }

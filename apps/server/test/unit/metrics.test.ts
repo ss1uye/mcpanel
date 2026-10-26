@@ -1,9 +1,16 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import si from 'systeminformation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServerWsMessage, SystemMetricsSample } from '@mcpanel/shared';
-import { collectTreePids, MetricsService, type MetricsCollector } from '../../src/services/metrics-service';
+import {
+  collectTreePids,
+  cpuUsagePercent,
+  defaultCollector,
+  MetricsService,
+  type MetricsCollector,
+} from '../../src/services/metrics-service';
 import { diskUsage } from '../../src/utils/disk';
 import { instances } from '../../src/db/schema';
 import type { InstanceSupervisor } from '../../src/services/instance-supervisor';
@@ -173,6 +180,87 @@ describe('MetricsService', () => {
     expect(service.getLatestSystem()?.cpuPercent).toBe(42);
   });
 
+  it('reuses a fresh system overview sample instead of collecting again', async () => {
+    vi.useFakeTimers();
+    const ctx = createTestDb();
+    contexts.push(ctx);
+    const system = vi.fn<MetricsCollector['system']>().mockResolvedValue(systemSample(42));
+    const service = new MetricsService({
+      collector: { system, instance: async () => ({ ts: '', cpu: 0, memBytes: 0, diskFreeBytes: 0 }) },
+      supervisor: {} as InstanceSupervisor,
+      db: ctx.db,
+      dataDir: ctx.dir,
+    });
+
+    expect((await service.getSystemOverview()).cpuPercent).toBe(42);
+    expect((await service.getSystemOverview()).cpuPercent).toBe(42);
+    expect(system).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(6000);
+    await service.getSystemOverview();
+    expect(system).toHaveBeenCalledTimes(2);
+    service.stop();
+  });
+
+  it('samples multiple instances concurrently within one tick', async () => {
+    const ctx = createTestDb();
+    contexts.push(ctx);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mcpanel-metrics-'));
+    dirs.push(root);
+    const first = insertInstanceRow(ctx.db, { name: 'first', rootPath: path.join(root, 'first') });
+    const second = insertInstanceRow(ctx.db, { name: 'second', rootPath: path.join(root, 'second') });
+    const starts: number[] = [];
+    let calls = 0;
+    const collector: MetricsCollector = {
+      system: async () => systemSample(),
+      instance: async () => {
+        calls += 1;
+        if (calls > 1) starts.push(Date.now());
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return { ts: new Date().toISOString(), cpu: 1, memBytes: 1, diskFreeBytes: 1 };
+      },
+    };
+    const supervisor = {
+      getStatus: (instanceId: string) => ({
+        instanceId,
+        state: 'running',
+        pid: instanceId === first.id ? 11 : 22,
+        startedAt: null,
+        exitCode: null,
+        error: null,
+      }),
+    } as unknown as InstanceSupervisor;
+    const service = new MetricsService({ collector, supervisor, db: ctx.db, dataDir: ctx.dir });
+    try {
+      service.setInstanceActive(first.id, true);
+      await vi.waitFor(() => expect(service.getLatestInstance(first.id)).not.toBeNull(), { timeout: 2000 });
+      service.setInstanceActive(second.id, true);
+      await vi.waitFor(() => expect(starts).toHaveLength(2), { timeout: 5000 });
+      expect(Math.abs(starts[0]! - starts[1]!)).toBeLessThan(100);
+      await vi.waitFor(() => expect(service.getLatestInstance(second.id)).not.toBeNull(), { timeout: 2000 });
+    } finally {
+      service.stop();
+    }
+  }, 15000);
+
+  it('collects system metrics from native OS counters', async () => {
+    const ctx = createTestDb();
+    contexts.push(ctx);
+    const load = vi.spyOn(si, 'currentLoad');
+    const memory = vi.spyOn(si, 'mem');
+    try {
+      const sample = await defaultCollector.system(ctx.dir);
+      expect(load).not.toHaveBeenCalled();
+      expect(memory).not.toHaveBeenCalled();
+      expect(sample.memTotalBytes).toBe(os.totalmem());
+      expect(sample.memUsedBytes).toBeGreaterThan(0);
+      expect(sample.uptimeSec).toBeGreaterThan(0);
+    } finally {
+      load.mockRestore();
+      memory.mockRestore();
+    }
+  });
+
   it('reads real disk usage for an existing path', async () => {
     const ctx = createTestDb();
     contexts.push(ctx);
@@ -180,6 +268,17 @@ describe('MetricsService', () => {
     expect(usage.total).toBeGreaterThan(0);
     expect(usage.free).toBeGreaterThan(0);
     expect(usage.free).toBeLessThanOrEqual(usage.total);
+  });
+});
+
+describe('cpuUsagePercent', () => {
+  it('computes busy time from cumulative idle and total ticks', () => {
+    expect(cpuUsagePercent({ idle: 850, total: 1000 }, { idle: 1700, total: 2000 })).toBe(15);
+    expect(cpuUsagePercent({ idle: 1, total: 1 }, { idle: 20, total: 100 })).toBe(80.8);
+  });
+
+  it('returns zero when the counters did not advance', () => {
+    expect(cpuUsagePercent({ idle: 10, total: 10 }, { idle: 10, total: 10 })).toBe(0);
   });
 });
 

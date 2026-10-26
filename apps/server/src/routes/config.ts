@@ -6,7 +6,7 @@ import type { SessionService } from '../auth/session';
 import type { PathSandbox } from '../nodes/path-sandbox';
 import type { AuditService } from '../services/audit-service';
 import type { InstanceService } from '../services/instance-service';
-import { loadServerProperties } from '../services/properties-service';
+import { clearServerPropertiesCache, loadServerProperties } from '../services/properties-service';
 import { patchEula, patchProperties, validatePropertyChanges } from '../services/properties-patch';
 import type { RconService } from '../services/rcon-service';
 import { AppError } from '../utils/errors';
@@ -57,6 +57,7 @@ export function registerConfigRoutes(app: FastifyInstance, deps: ConfigRouteDeps
     const next = patchProperties(loaded.raw, input.changes);
     const file = await sandbox.resolve(row.rootPath, 'server.properties');
     await writeFileAtomic(file, next);
+    clearServerPropertiesCache();
     rcon.invalidate(row.id);
     audit.record({
       userId: request.user?.id,

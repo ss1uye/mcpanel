@@ -1,3 +1,4 @@
+import os from 'node:os';
 import pidusage from 'pidusage';
 import si from 'systeminformation';
 import type { Logger } from 'pino';
@@ -10,6 +11,7 @@ import type { InstanceSupervisor } from './instance-supervisor';
 
 const SAMPLE_INTERVAL_MS = 3000;
 const HISTORY_SIZE = 60;
+const SYSTEM_OVERVIEW_CACHE_MS = 5000;
 /** One Windows process enumeration costs a PowerShell run, so instances in the same tick share it. */
 const PROCESS_LIST_TTL_MS = 1000;
 
@@ -19,18 +21,29 @@ interface TreeProcess {
 }
 
 let processList: { at: number; list: TreeProcess[] } | null = null;
+let processListTask: Promise<TreeProcess[] | null> | null = null;
+
+async function getProcessList(): Promise<TreeProcess[] | null> {
+  if (processList && Date.now() - processList.at <= PROCESS_LIST_TTL_MS) return processList.list;
+  if (!processListTask) {
+    processListTask = si
+      .processes()
+      .then(({ list }) => {
+        const mapped = list.map(({ pid, parentPid }) => ({ pid, parentPid }));
+        processList = { at: Date.now(), list: mapped };
+        return mapped;
+      })
+      .catch(() => null)
+      .finally(() => {
+        processListTask = null;
+      });
+  }
+  return processListTask;
+}
 
 async function treePids(rootPid: number): Promise<number[]> {
-  const now = Date.now();
-  if (!processList || now - processList.at > PROCESS_LIST_TTL_MS) {
-    try {
-      const { list } = await si.processes();
-      processList = { at: now, list: list.map(({ pid, parentPid }) => ({ pid, parentPid })) };
-    } catch {
-      processList = null;
-    }
-  }
-  return processList ? collectTreePids(processList.list, rootPid) : [rootPid];
+  const list = await getProcessList();
+  return list ? collectTreePids(list, rootPid) : [rootPid];
 }
 
 export interface MetricsCollector {
@@ -63,17 +76,45 @@ export function collectTreePids(processes: TreeProcess[], rootPid: number): numb
   return pids;
 }
 
+export interface CpuSnapshot {
+  idle: number;
+  total: number;
+}
+
+export function cpuSnapshot(cpus: os.CpuInfo[] = os.cpus()): CpuSnapshot {
+  let idle = 0;
+  let total = 0;
+  for (const cpu of cpus) {
+    idle += cpu.times.idle;
+    total += cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq;
+  }
+  return { idle, total };
+}
+
+export function cpuUsagePercent(previous: CpuSnapshot, current: CpuSnapshot): number {
+  const totalDelta = current.total - previous.total;
+  if (totalDelta <= 0) return 0;
+  const idleDelta = current.idle - previous.idle;
+  const percent = ((totalDelta - idleDelta) / totalDelta) * 100;
+  return Number(Math.min(100, Math.max(0, percent)).toFixed(1));
+}
+
+let previousCpu = cpuSnapshot();
+
 export const defaultCollector: MetricsCollector = {
   async system(dataDir) {
-    const [load, mem, disk, time] = await Promise.all([si.currentLoad(), si.mem(), diskUsage(dataDir), si.time()]);
+    const currentCpu = cpuSnapshot();
+    const cpuPercent = cpuUsagePercent(previousCpu, currentCpu);
+    previousCpu = currentCpu;
+    const [disk, memTotal] = await Promise.all([diskUsage(dataDir), Promise.resolve(os.totalmem())]);
     return {
       ts: new Date().toISOString(),
-      cpuPercent: Number(load.currentLoad.toFixed(1)),
-      memUsedBytes: mem.used,
-      memTotalBytes: mem.total,
+      cpuPercent,
+      memUsedBytes: Math.max(0, memTotal - os.freemem()),
+      memTotalBytes: memTotal,
       diskFreeBytes: disk.free,
       diskTotalBytes: disk.total,
-      uptimeSec: time.uptime,
+      uptimeSec: os.uptime(),
       platform: process.platform,
       arch: process.arch,
       nodeVersion: process.version,
@@ -113,6 +154,7 @@ export class MetricsService {
   private readonly instanceHistory = new Map<string, ProcessMetricsSample[]>();
   private readonly instanceCounts = new Map<string, number>();
   private systemCount = 0;
+  private systemSampleAt = 0;
   private timer: NodeJS.Timeout | null = null;
   private sampling = false;
   private sink: ((message: ServerWsMessage) => void) | null = null;
@@ -146,6 +188,8 @@ export class MetricsService {
   }
 
   async getSystemOverview(): Promise<SystemMetricsSample> {
+    const latest = this.getLatestSystem();
+    if (latest && Date.now() - this.systemSampleAt < SYSTEM_OVERVIEW_CACHE_MS) return latest;
     const sample = await this.collector.system(this.deps.dataDir);
     this.pushSystem(sample);
     return sample;
@@ -175,30 +219,42 @@ export class MetricsService {
     this.sampling = true;
     try {
       if (this.systemCount > 0) {
-        this.pushSystem(await this.collector.system(this.deps.dataDir));
+        try {
+          this.pushSystem(await this.collector.system(this.deps.dataDir));
+        } catch (error) {
+          this.deps.logger?.warn({ err: error }, 'system metrics sampling failed');
+        }
       }
-      for (const instanceId of [...this.instanceCounts.keys()]) {
-        const status = this.deps.supervisor.getStatus(instanceId);
-        if (!status.pid || (status.state !== 'running' && status.state !== 'orphaned')) continue;
-        const row = this.deps.db.select().from(instances).where(eq(instances.id, instanceId)).get();
-        if (!row) continue;
-        const sample = await this.collector.instance(status.pid, row.rootPath).catch(() => null);
-        if (!sample) continue;
-        const history = this.instanceHistory.get(instanceId) ?? [];
-        history.push(sample);
-        this.instanceHistory.set(instanceId, history.slice(-HISTORY_SIZE));
-        this.sink?.({ type: 'metrics.sample', target: 'instance', instanceId, ts: sample.ts, sample });
+      const results = await Promise.allSettled(
+        [...this.instanceCounts.keys()].map((instanceId) => this.collectInstance(instanceId)),
+      );
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          // A single failed sample (e.g. Windows EBUSY while the OS is busy) must
+          // not become an unhandled rejection and take down the whole panel.
+          this.deps.logger?.warn({ err: result.reason }, 'instance metrics sampling failed');
+        }
       }
-    } catch (error) {
-      // A single failed sample (e.g. Windows EBUSY while the OS is busy) must
-      // not become an unhandled rejection and take down the whole panel.
-      this.deps.logger?.warn({ err: error }, 'metrics sampling failed');
     } finally {
       this.sampling = false;
     }
   }
 
+  private async collectInstance(instanceId: string): Promise<void> {
+    const status = this.deps.supervisor.getStatus(instanceId);
+    if (!status.pid || (status.state !== 'running' && status.state !== 'orphaned')) return;
+    const row = this.deps.db.select().from(instances).where(eq(instances.id, instanceId)).get();
+    if (!row) return;
+    const sample = await this.collector.instance(status.pid, row.rootPath).catch(() => null);
+    if (!sample) return;
+    const history = this.instanceHistory.get(instanceId) ?? [];
+    history.push(sample);
+    this.instanceHistory.set(instanceId, history.slice(-HISTORY_SIZE));
+    this.sink?.({ type: 'metrics.sample', target: 'instance', instanceId, ts: sample.ts, sample });
+  }
+
   private pushSystem(sample: SystemMetricsSample): void {
+    this.systemSampleAt = Date.now();
     this.systemHistory.push(sample);
     if (this.systemHistory.length > HISTORY_SIZE) this.systemHistory.shift();
     this.sink?.({ type: 'metrics.sample', target: 'system', ts: sample.ts, sample });

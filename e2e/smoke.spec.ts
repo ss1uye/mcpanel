@@ -29,6 +29,8 @@ test('init, onboard, run, back up and restore', async ({ page }) => {
 
   await page.getByRole('button', { name: '启动' }).click();
   await expect(page.getByText('运行中').first()).toBeVisible({ timeout: 60_000 });
+  // The overview sparkline needs two live metrics samples (3s apart).
+  await expect(page.locator('polyline').first()).toBeVisible({ timeout: 20_000 });
 
   await page.getByRole('link', { name: '控制台', exact: true }).click();
   await expect(page.getByText(/Starting minecraft server/)).toBeVisible({ timeout: 30_000 });

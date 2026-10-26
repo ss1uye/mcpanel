@@ -13,6 +13,8 @@ import type {
 const MAX_LINES = 5000;
 const MAX_SAMPLES = 60;
 const PING_INTERVAL_MS = 30_000;
+const HEARTBEAT_CHECK_MS = 15_000;
+const HEARTBEAT_TIMEOUT_MS = 75_000;
 
 export interface ConsoleState {
   lines: ConsoleLine[];
@@ -69,19 +71,20 @@ export function reduceRealtime(state: RealtimeState, message: ServerWsMessage): 
       const id = channelInstance(message.channel);
       if (!id) return state;
       const previous = state.console[id] ?? EMPTY_CONSOLE;
-      const seen = new Set(previous.lines.map((line) => line.seq));
+      let lastSeq = previous.lastSeq;
       const additions: ConsoleLine[] = [];
       for (const line of message.lines) {
-        if (seen.has(line.seq)) continue;
-        seen.add(line.seq);
+        if (line.seq <= lastSeq) continue;
+        lastSeq = line.seq;
         additions.push(line);
       }
+      if (additions.length === 0) return state;
       const merged = [...previous.lines, ...additions].slice(-MAX_LINES);
       return {
         ...state,
         console: {
           ...state.console,
-          [id]: { lines: merged, lastSeq: merged.at(-1)?.seq ?? previous.lastSeq, gap: previous.gap },
+          [id]: { lines: merged, lastSeq, gap: previous.gap },
         },
       };
     }
@@ -143,6 +146,8 @@ export const useRealtime = create<RealtimeStore>((set) => ({
 const references = new Map<string, number>();
 let socket: WebSocket | null = null;
 let pingTimer: number | null = null;
+let heartbeatTimer: number | null = null;
+let lastMessageAt = 0;
 let reconnectTimer: number | null = null;
 let attempts = 0;
 let intentionallyClosed = false;
@@ -167,14 +172,22 @@ function ensureSocket(): void {
 
   current.addEventListener('open', () => {
     attempts = 0;
+    lastMessageAt = Date.now();
     useRealtime.getState().setConnection('open');
     for (const channel of references.keys()) {
       post({ type: 'subscribe', channel, sinceSeq: lastSeqFor(channel) });
     }
+    if (pingTimer !== null) window.clearInterval(pingTimer);
     pingTimer = window.setInterval(() => post({ type: 'ping' }), PING_INTERVAL_MS);
+    if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
+    heartbeatTimer = window.setInterval(() => {
+      // Sleep/network loss can leave the TCP connection half-open; force a reconnect.
+      if (Date.now() - lastMessageAt >= HEARTBEAT_TIMEOUT_MS) current.close();
+    }, HEARTBEAT_CHECK_MS);
   });
 
   current.addEventListener('message', (event) => {
+    lastMessageAt = Date.now();
     try {
       useRealtime.getState().apply(JSON.parse(String(event.data)) as ServerWsMessage);
     } catch {
@@ -188,6 +201,8 @@ function ensureSocket(): void {
     useRealtime.getState().setConnection('closed');
     if (pingTimer !== null) window.clearInterval(pingTimer);
     pingTimer = null;
+    if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
     socket = null;
     if (!intentionallyClosed && references.size > 0) scheduleReconnect();
   });
@@ -239,6 +254,8 @@ export function disconnectRealtime(): void {
   reconnectTimer = null;
   if (pingTimer !== null) window.clearInterval(pingTimer);
   pingTimer = null;
+  if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
   socket?.close();
   socket = null;
   // Logged-out operators must not see the previous session's console lines until fresh snapshots arrive.

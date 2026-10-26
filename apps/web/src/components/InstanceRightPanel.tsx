@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type { InstanceInfo, InstanceStatusSnapshot, PlayersResponse } from '@mcpanel/shared';
 import { api } from '../api/client';
 import { StatusBadge } from './StatusBadge';
 import { PlayerAvatar } from './PlayerAvatar';
 import { RCON_LABELS } from '../utils/labels';
+import { shouldPollPlayers } from '../utils/polling';
 
 export function InstanceRightPanel({
   instance,
@@ -13,10 +14,11 @@ export function InstanceRightPanel({
   instance: InstanceInfo;
   status: InstanceStatusSnapshot;
 }) {
+  const location = useLocation();
   const players = useQuery({
     queryKey: ['players', instance.id],
     queryFn: () => api.get<PlayersResponse>(`/instances/${instance.id}/players`),
-    refetchInterval: 15_000,
+    refetchInterval: shouldPollPlayers(status.state, location.pathname.endsWith('/players')) ? 15_000 : false,
   });
   const online = players.data?.online ?? [];
 

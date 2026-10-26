@@ -266,26 +266,6 @@ export class BackupService {
         }
       }
       const { levelName, extraPaths } = await this.validateSources(row);
-      const plan = await planBackupSources(row.rootPath, {
-        levelName,
-        includeMods: row.backupIncludeMods,
-        includeConfig: row.backupIncludeConfig,
-        extraPaths,
-      });
-      const disk = await diskUsage(this.deps.dataDir);
-      if (disk.free < plan.totalBytes * 1.5) {
-        throw new AppError('INSUFFICIENT_DISK', '磁盘剩余空间不足（需要源大小的 1.5 倍）');
-      }
-
-      const manifest: BackupManifest = {
-        schemaVersion: 1,
-        panelVersion: PANEL_VERSION,
-        instanceName: row.name,
-        createdAt: new Date(createdAt).toISOString(),
-        sources: plan.sources,
-        fileCount: plan.fileCount,
-        totalBytes: plan.totalBytes,
-      };
       const filename = `${stamp(new Date(createdAt))}-${kind}-${backupId.slice(0, 6)}.zip`;
       this.deps.db
         .insert(backups)
@@ -300,12 +280,34 @@ export class BackupService {
         })
         .run();
 
-      const pack = async () => {
+      const pack = async (): Promise<{ bytes: number; manifest: BackupManifest }> => {
+        // Plan and archive in the same pass. For a running server this runs
+        // after save-off/save-all, so the file list reflects the frozen world.
+        const plan = await planBackupSources(row.rootPath, {
+          levelName,
+          includeMods: row.backupIncludeMods,
+          includeConfig: row.backupIncludeConfig,
+          extraPaths,
+        });
+        const disk = await diskUsage(this.deps.dataDir);
+        if (disk.free < plan.totalBytes * 1.5) {
+          throw new AppError('INSUFFICIENT_DISK', '磁盘剩余空间不足（需要源大小的 1.5 倍）');
+        }
+        const manifest: BackupManifest = {
+          schemaVersion: 1,
+          panelVersion: PANEL_VERSION,
+          instanceName: row.name,
+          createdAt: new Date(createdAt).toISOString(),
+          sources: plan.sources,
+          fileCount: plan.fileCount,
+          totalBytes: plan.totalBytes,
+        };
         const bytes = await writeBackupArchive({
           root: row.rootPath,
           sources: plan.sources,
           destination: tmpFile,
           manifest,
+          entries: { files: plan.files, directories: plan.directories },
           onProgress: (fraction) =>
             tasks.update(task.id, {
               progress: progressSpan[0] + fraction * (progressSpan[1] - progressSpan[0]),
@@ -313,9 +315,9 @@ export class BackupService {
         });
         await fs.mkdir(instanceDir, { recursive: true });
         await fs.rename(tmpFile, path.join(instanceDir, filename));
-        return bytes;
+        return { bytes, manifest };
       };
-      const bytes = running
+      const { bytes, manifest } = running
         ? await withFrozenServer(
             {
               rcon: this.deps.rcon,

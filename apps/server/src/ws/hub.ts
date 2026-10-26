@@ -21,6 +21,7 @@ import { AppError } from '../utils/errors';
 const MAX_BUFFERED_BYTES = 1024 * 1024;
 const IDLE_TIMEOUT_MS = 70_000;
 const SWEEP_INTERVAL_MS = 30_000;
+const CONSOLE_BATCH_MS = 60;
 
 interface ClientConn {
   socket: WebSocket;
@@ -40,7 +41,9 @@ export interface WsHubDeps {
 
 export class WsHub {
   private readonly clients = new Map<WebSocket, ClientConn>();
+  private readonly consolePending = new Map<string, ConsoleLine[]>();
   private sweeper: NodeJS.Timeout | null = null;
+  private consoleTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly deps: WsHubDeps) {
     deps.supervisor.on('console', (instanceId: string, lines: ConsoleLine[]) => this.publishConsole(instanceId, lines));
@@ -80,19 +83,12 @@ export class WsHub {
 
   publishConsole(instanceId: string, lines: ConsoleLine[]): void {
     const channel = `instance:${instanceId}:console`;
-    for (const conn of this.clients.values()) {
-      if (!conn.subscriptions.has(channel)) continue;
-      if (conn.socket.bufferedAmount > MAX_BUFFERED_BYTES) {
-        conn.dropped.set(channel, (conn.dropped.get(channel) ?? 0) + lines.length);
-        continue;
-      }
-      const dropped = conn.dropped.get(channel) ?? 0;
-      if (dropped > 0) {
-        this.send(conn, { type: 'console.gap', channel, dropped });
-        conn.dropped.delete(channel);
-      }
-      this.send(conn, { type: 'console.append', channel, lines });
-    }
+    const pending = this.consolePending.get(channel);
+    if (pending) pending.push(...lines);
+    else this.consolePending.set(channel, [...lines]);
+    if (this.consoleTimer) return;
+    this.consoleTimer = setTimeout(() => this.flushConsole(), CONSOLE_BATCH_MS);
+    this.consoleTimer.unref();
   }
 
   publishState(snapshot: InstanceStatusSnapshot): void {
@@ -127,6 +123,9 @@ export class WsHub {
   closeAll(): void {
     if (this.sweeper) clearInterval(this.sweeper);
     this.sweeper = null;
+    if (this.consoleTimer) clearTimeout(this.consoleTimer);
+    this.consoleTimer = null;
+    this.consolePending.clear();
     for (const conn of this.clients.values()) {
       conn.socket.close();
       this.releaseAll(conn);
@@ -299,6 +298,27 @@ export class WsHub {
     this.clients.delete(conn.socket);
     this.releaseAll(conn);
     conn.socket.removeAllListeners();
+  }
+
+  private flushConsole(): void {
+    this.consoleTimer = null;
+    const pending = [...this.consolePending.entries()];
+    this.consolePending.clear();
+    for (const [channel, lines] of pending) {
+      for (const conn of this.clients.values()) {
+        if (!conn.subscriptions.has(channel)) continue;
+        if (conn.socket.bufferedAmount > MAX_BUFFERED_BYTES) {
+          conn.dropped.set(channel, (conn.dropped.get(channel) ?? 0) + lines.length);
+          continue;
+        }
+        const dropped = conn.dropped.get(channel) ?? 0;
+        if (dropped > 0) {
+          this.send(conn, { type: 'console.gap', channel, dropped });
+          conn.dropped.delete(channel);
+        }
+        this.send(conn, { type: 'console.append', channel, lines });
+      }
+    }
   }
 
   private sweepIdle(): void {

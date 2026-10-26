@@ -25,6 +25,18 @@ describe('reduceRealtime', () => {
     expect(consoleState?.lastSeq).toBe(2);
   });
 
+  it('drops stale lines older than the last known sequence', () => {
+    let state = reduceRealtime(emptyRealtime, {
+      type: 'console.snapshot',
+      channel,
+      lines: [line(10), line(11), line(12)],
+      lastSeq: 12,
+      gap: false,
+    });
+    state = reduceRealtime(state, { type: 'console.append', channel, lines: [line(5), line(13)] });
+    expect(state.console[id]?.lines.map((entry) => entry.seq)).toEqual([10, 11, 12, 13]);
+  });
+
   it('marks gaps and never keeps more than 5000 lines', () => {
     const lines = Array.from({ length: 5001 }, (_value, index) => line(index + 1));
     let state = reduceRealtime(emptyRealtime, { type: 'console.snapshot', channel, lines, lastSeq: 5001, gap: false });

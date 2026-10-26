@@ -71,6 +71,29 @@ describe('planBackupSources', () => {
     expect(plan.skippedMissing).not.toContain('world');
   });
 
+  it('returns the file and empty-directory entries for the archive step', async () => {
+    const root = await fixtures();
+    await fs.mkdir(path.join(root, 'world', 'empty'));
+    const plan = await planBackupSources(root, {
+      levelName: 'world',
+      includeMods: false,
+      includeConfig: true,
+      extraPaths: ['plugins'],
+    });
+    expect(plan.files).toEqual(
+      expect.arrayContaining([
+        'world/level.dat',
+        'world/region/r.0.0.mca',
+        'config/a.yml',
+        'server.properties',
+        'plugins/extra.txt',
+      ]),
+    );
+    expect(plan.directories).toContain('world/empty');
+    expect(plan.files).not.toContain('logs/latest.log');
+    expect(new Set(plan.files).size).toBe(plan.files.length);
+  });
+
   it('rejects when there is nothing to back up', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mcpanel-empty-'));
     roots.push(root);

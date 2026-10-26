@@ -52,13 +52,33 @@ function isEnoent(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === 'ENOENT';
 }
 
-async function readRegularFile(file: string, maxBytes: number): Promise<{ raw: string; mtime: number }> {
+async function statRegularFile(file: string, maxBytes: number) {
   const stat = await fs.lstat(file);
   if (stat.isSymbolicLink()) throw new AppError('SYMLINK_NOT_ALLOWED', '不允许读取符号链接或目录联接');
   if (!stat.isFile()) throw new AppError('UNSUPPORTED_FILE', '目标不是普通文件');
   if (stat.size > maxBytes) throw new AppError('FILE_TOO_LARGE', `文件超过 ${Math.floor(maxBytes / 1024 / 1024)} MB 限制`);
+  return stat;
+}
+
+async function readRegularFile(file: string, maxBytes: number): Promise<{ raw: string; mtime: number }> {
+  const stat = await statRegularFile(file, maxBytes);
   const raw = await fs.readFile(file, 'utf8');
   return { raw, mtime: stat.mtimeMs };
+}
+
+interface CachedProperties {
+  mtime: number;
+  ctime: number;
+  size: number;
+  value: { raw: string; parsed: ParsedProperties; mtime: number };
+}
+
+const MAX_CACHED_PROPERTIES = 50;
+const propertiesCache = new Map<string, CachedProperties>();
+
+/** Panel-initiated writes must not rely on mtime/ctime resolution to see their own change. */
+export function clearServerPropertiesCache(): void {
+  propertiesCache.clear();
 }
 
 export async function readSandboxedTextFile(
@@ -82,8 +102,19 @@ export async function loadServerProperties(
 ): Promise<{ raw: string; parsed: ParsedProperties; mtime: number } | null> {
   const file = sandbox ? await sandbox.resolve(root, 'server.properties') : path.join(root, 'server.properties');
   try {
-    const { raw, mtime } = await readRegularFile(file, MAX_PROPERTIES_FILE_BYTES);
-    return { raw, parsed: parseProperties(raw), mtime };
+    const stat = await statRegularFile(file, MAX_PROPERTIES_FILE_BYTES);
+    const cached = propertiesCache.get(file);
+    if (cached && cached.mtime === stat.mtimeMs && cached.ctime === stat.ctimeMs && cached.size === stat.size) {
+      return cached.value;
+    }
+    const raw = await fs.readFile(file, 'utf8');
+    const value = { raw, parsed: parseProperties(raw), mtime: stat.mtimeMs };
+    propertiesCache.set(file, { mtime: stat.mtimeMs, ctime: stat.ctimeMs, size: stat.size, value });
+    if (propertiesCache.size > MAX_CACHED_PROPERTIES) {
+      const oldest = propertiesCache.keys().next().value;
+      if (oldest !== undefined) propertiesCache.delete(oldest);
+    }
+    return value;
   } catch (error) {
     if (isEnoent(error)) return null;
     throw error;
