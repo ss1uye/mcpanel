@@ -1,6 +1,6 @@
 # MC Panel 交接文档
 
-> 最后更新：2026-10-26 · 版本 v0.3.1 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树：发布准备中
+> 最后更新：2026-10-26 · 版本 v0.3.1 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树：桌面版计划编写中
 > 用途：上下文压缩或换人接手后，凭本文档即可继续，无需重新探索。
 
 ## 1. 一句话状态
@@ -52,6 +52,8 @@ npm run smoke:portable     # 解压 ZIP 后真实启动并检查 health/首页/�
 | `docs/superpowers/plans/HANDOFF-phase3.md` | 阶段 3 收尾、审查结论、遗留风险 |
 | `docs/superpowers/plans/HANDOFF-phase4.md` | v0.2 收尾、决策与验证记录 |
 | `docs/superpowers/specs/2026-10-26-mcpanel-portable-release-design.md` | v0.3 便携发版设计 |
+| `docs/superpowers/specs/2026-10-26-mcpanel-desktop-design.md` | v0.4 桌面版（Electron）设计 |
+| `docs/releases/v0.3.1.md` | v0.3.1 发版说明（GitHub Release 正文） |
 | `docs/superpowers/plans/2026-10-26-mcpanel-portable-release.md` | v0.3 便携发版计划 |
 | `docs/portable.md` | Windows 便携版下载、启动、升级、迁移与排障 |
 | `README.md` | 安装/开发/生产/备份与恢复/定时任务/安全/升级/忘记密码 |
@@ -107,6 +109,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
   `e2e`（ubuntu：Playwright Chromium）、`secret-scan`（gitleaks 全历史）。
 - 发布：`.github/workflows/release.yml`，`v*` tag 或手动触发，在 Windows 上构建便携 ZIP、冒烟、上传 artifact；tag 时创建 GitHub Release（ZIP + SHA256SUMS）。
 - 已发布 v0.3.0：https://github.com/ss1uye/mcpanel/releases/tag/v0.3.0（tag 指向 `212b5b8`，ZIP 57,099,945 bytes，SHA256 `c6daa52129cfd1bc8dabec8656bfac7fb7e0c0d2c5515cef0186998d151e86a7`）。
+- 已发布 v0.3.1：https://github.com/ss1uye/mcpanel/releases/tag/v0.3.1（tag 指向 `8d841a2`，ZIP 57,607,944 bytes，SHA256 `07ba3bcbfef8853bb7da2095de1868a3480327a8ddc183c6ca0e6cd2efd0b356`；Release workflow 与 CI 均通过；桌面版设计 spec 为 `9387283`）。
 - 密钥扫描：`.gitleaks.toml`；测试/文档中的已知测试凭据通过白名单排除。
 - 仓库描述与 topics 需在 GitHub 网页设置（API 写入需要 token，本项目只用 SSH）。
 
