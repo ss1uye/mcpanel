@@ -11,6 +11,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockReset();
   clearCsrfToken();
+  delete (window as unknown as { mcpanelDesktop?: unknown }).mcpanelDesktop;
 });
 
 afterEach(() => {
@@ -94,5 +95,40 @@ describe('api client', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:download');
     vi.unstubAllGlobals();
     click.mockRestore();
+  });
+
+  it('delegates downloads to the desktop bridge when present', async () => {
+    const saveFile = vi.fn().mockResolvedValue({ canceled: false, filePath: 'C:\\tmp\\latest.log' });
+    (window as unknown as { mcpanelDesktop: { saveFile: typeof saveFile } }).mcpanelDesktop = { saveFile };
+
+    await downloadFile('/instances/x/logs/download', 'latest.log');
+
+    expect(saveFile).toHaveBeenCalledWith({
+      url: `${window.location.origin}/api/instances/x/logs/download`,
+      filename: 'latest.log',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('maps desktop bridge errors to ApiError and the unauthorized event', async () => {
+    const listener = vi.fn();
+    window.addEventListener('mcpanel:unauthorized', listener);
+    (window as unknown as { mcpanelDesktop: unknown }).mcpanelDesktop = {
+      saveFile: vi.fn().mockResolvedValue({
+        error: { code: 'AUTH_REQUIRED', message: '请先登录', status: 401 },
+      }),
+    };
+    const error = await downloadFile('/instances/x/logs/download', 'latest.log').catch((cause) => cause);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe('AUTH_REQUIRED');
+    expect(listener).toHaveBeenCalledTimes(1);
+    window.removeEventListener('mcpanel:unauthorized', listener);
+  });
+
+  it('returns quietly when the desktop save dialog is canceled', async () => {
+    const saveFile = vi.fn().mockResolvedValue({ canceled: true });
+    (window as unknown as { mcpanelDesktop: { saveFile: typeof saveFile } }).mcpanelDesktop = { saveFile };
+    await expect(downloadFile('/instances/x/logs/download', 'latest.log')).resolves.toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

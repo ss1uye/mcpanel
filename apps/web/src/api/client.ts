@@ -74,6 +74,15 @@ type SaveFilePickerWindow = Window & {
   }>;
 };
 
+interface DesktopBridgeResult {
+  canceled?: boolean;
+  error?: { code: string; message: string; status: number };
+}
+
+interface DesktopBridge {
+  saveFile(input: { url: string; filename: string }): Promise<DesktopBridgeResult>;
+}
+
 /**
  * Downloads via fetch so an expired session yields a handled 401 instead of a
  * JSON page replacing the SPA. Large bodies (multi-GB backups) stream straight
@@ -81,6 +90,23 @@ type SaveFilePickerWindow = Window & {
  * blob would freeze the tab.
  */
 export async function downloadFile(path: string, filename: string, signal?: AbortSignal): Promise<void> {
+  const desktop = (window as unknown as { mcpanelDesktop?: DesktopBridge }).mcpanelDesktop;
+  if (desktop) {
+    const result = await desktop.saveFile({
+      url: new URL(`/api${path}`, window.location.origin).toString(),
+      filename,
+    });
+    if (result.error) {
+      if (result.error.status === 401) {
+        clearCsrfToken();
+        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+      }
+      throw new ApiError(result.error.code, result.error.message, result.error.status);
+    }
+    // Canceled or saved: the desktop process owns the bytes, so no blob is created.
+    return;
+  }
+
   const response = await fetch(`/api${path}`, { credentials: 'same-origin', signal });
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as ApiErrorBody | null;
