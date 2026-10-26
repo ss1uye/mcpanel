@@ -55,11 +55,22 @@ jobs:
             $lines | Select-Object -Last 20 | ForEach-Object { Write-Host "::error::$_" }
             exit $code
           }
+      - name: Build desktop package
+        shell: pwsh
+        run: |
+          $lines = & npm run release:desktop 2>&1
+          $code = $LASTEXITCODE
+          $lines | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) {
+            $lines | Select-Object -Last 20 | ForEach-Object { Write-Host "::error::$_" }
+            exit $code
+          }
       - uses: actions/upload-artifact@v4
         with:
-          name: mcpanel-portable-windows-x64
+          name: mcpanel-windows-x64
           path: |
             release/mcpanel-*-win-x64.zip
+            release/desktop/*.exe
             release/SHA256SUMS.txt
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -70,5 +81,6 @@ jobs:
           body_path: docs/releases/${{ github.ref_name }}.md
           files: |
             release/mcpanel-*-win-x64.zip
+            release/desktop/*.exe
             release/SHA256SUMS.txt
           fail_on_unmatched_files: true
