@@ -6,7 +6,7 @@
 
 从 [GitHub Releases](https://github.com/ss1uye/mcpanel/releases/latest) 下载：
 
-- `mcpanel-0.3.0-win-x64.zip`
+- `mcpanel-0.3.1-win-x64.zip`
 - `SHA256SUMS.txt`（可选，用于校验）
 
 ## 解压与启动
@@ -25,7 +25,7 @@
 ## 数据与配置
 
 ```text
-mcpanel-0.3.0-win-x64/
+mcpanel-0.3.1-win-x64/
 ├─ start-panel.bat
 ├─ .env                  # 首次启动从 .env.example 复制
 ├─ data/

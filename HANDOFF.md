@@ -1,6 +1,6 @@
 # MC Panel 交接文档
 
-> 最后更新：2026-10-26 · 版本 v0.3.0 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树干净
+> 最后更新：2026-10-26 · 版本 v0.3.1 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树：发布准备中
 > 用途：上下文压缩或换人接手后，凭本文档即可继续，无需重新探索。
 
 ## 1. 一句话状态
@@ -20,7 +20,7 @@ npm run build && npm start        # 生产：http://127.0.0.1:3000
 
 ```bash
 npm run typecheck      # 0 错误
-npm test               # server 225 / web 52 / shared 12
+npm test               # server 237 / web 59 / shared 12
 npm run lint
 npm run build
 npm run test:e2e       # Playwright Chromium，约 10s
@@ -101,8 +101,9 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 ## 7. 仓库配套
 
 - 许可证：MIT（`LICENSE`）。
+- 依赖安全：`@fastify/static` 10.1.7、`drizzle-orm` 0.45.4、`zod` 4.6.7；`npm audit --omit=dev --audit-level=high` 为 0 漏洞。
 - CI：`.github/workflows/ci.yml`，`main` push 与 PR 触发四个 job（`concurrency` 同分支去重，npm 11.19.1）：
-  `static`（ubuntu：typecheck + lint）、`test`（ubuntu + windows 矩阵：test + build；Windows 额外打包/冒烟便携包）、
+  `static`（ubuntu：typecheck + lint + 生产依赖审计，审计显式使用 npmjs registry）、`test`（ubuntu + windows 矩阵：test + build；Windows 额外打包/冒烟便携包）、
   `e2e`（ubuntu：Playwright Chromium）、`secret-scan`（gitleaks 全历史）。
 - 发布：`.github/workflows/release.yml`，`v*` tag 或手动触发，在 Windows 上构建便携 ZIP、冒烟、上传 artifact；tag 时创建 GitHub Release（ZIP + SHA256SUMS）。
 - 已发布 v0.3.0：https://github.com/ss1uye/mcpanel/releases/tag/v0.3.0（tag 指向 `212b5b8`，ZIP 57,099,945 bytes，SHA256 `c6daa52129cfd1bc8dabec8656bfac7fb7e0c0d2c5515cef0186998d151e86a7`）。
@@ -118,12 +119,13 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - 配置：分组表单 + 原始编辑（保留注释/顺序/EOL/重复键）、EULA。
 - 备份/恢复：严格冻结、manifest、保留策略、pre_restore、回滚、残留清理。
 - 计划：CRUD、立即运行、运行记录、时区。
-- 运维：审计页、面板设置与改密码、`start-panel.bat`、systemd 文档、`reset-password.mjs`、Playwright 冒烟。
+- 运维：审计页、面板设置与改密码、`start-panel.bat`、systemd 文档、`reset-password.mjs`、Playwright 冒烟；WS 心跳看门狗 75 秒无收包强制重连。
 - 编辑：CodeMirror 6（行号、搜索、JSON/YAML/properties 高亮），按需加载。
 - 安全：CSP nonce、Host 限定 WebSocket；生产环境无 CSP 违规（e2e 断言）。
 - 面板数据：设置页一键下载 SQLite 在线快照；CLI 可在面板运行时备份。
 - 计划：列表与表单展示未来 3 次运行时间。
-- 前端：路由级懒加载；首屏入口 `index` 221.6 kB + `react` 246.4 kB（gzip 66.2 + 78.6 kB），`charts` 314.1 kB、`CodeEditor` 437.0 kB 按需加载。
+- 前端：路由级懒加载；首屏入口 `index` 161.0 kB + `react` 258.0 kB（gzip 52.0 + 81.9 kB），`CodeEditor` 436.9 kB（gzip 142.9 kB）按需加载；sparkline 改为纯 SVG，recharts 与 `charts` 分包已移除；web 仅从 `@mcpanel/shared/constants` 取运行时值，避免 zod/schemas 进入首屏。
+- 性能：控制台日志按 60ms 批量推送、前端按 seq 增量去重；系统指标改用 `os.*`，实例指标并行采样并共享进程枚举；备份一次遍历生成文件清单并复用，文件列表分批并发 stat；`server.properties` 按 mtime/ctime/size 缓存并在面板写入后失效；玩家数据只在运行/孤儿状态轮询；删除实例改用异步清理备份目录。
 - 发版：Windows x64 便携 ZIP（内置 Node 24，约 55 MB），双击 `start-panel.bat`，用 Edge 打开；数据在包内 `data/`。
 
 ## 9. 已知限制（可接受，未阻塞 v0.3）
@@ -135,9 +137,9 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 5. 面板库快照只含 `panel.db`；恢复需停面板并手工替换文件，`.env` 与 `secret.key` 需单独保存。
 6. `data/` 只存在于本机；`data-e2e/`、`test-results/` 等已 gitignore。
 7. Linux 上孤儿 PID 身份校验可能失准：`sh -c` 对末条命令做 exec 优化后 cmdline 不含实例路径，且 `systeminformation` 抛错时按"已验证"处理——面板重启后可能把运行中的服务器误标为 crashed（`instance-supervisor.ts` recover）。
-8. 上传与解压没有磁盘空间预检（备份/恢复已有）；删除实例的备份目录用同步 `rmSync`，大目录会短暂阻塞事件循环。
+8. 上传与解压没有磁盘空间预检（备份/恢复已有）。
 9. 登录限速按 `request.ip`：`TRUST_PROXY=true` 且前面没有净化 `X-Forwarded-For` 的反代时可被伪造头绕过；共享出口 IP 时可反向锁死管理员 15 分钟。
-10. WS 连接在会话吊销（登出/改密码）后仍存活到断开为止；前端上传无进度/不可取消，WS 心跳不校验 pong（休眠恢复后连接可能假死约 10 分钟）。
+10. WS 连接在会话吊销（登出/改密码）后仍存活到断开为止；前端上传无进度/不可取消。
 11. 面板进程异常退出时，Windows 上启动器 `cmd.exe` 可能先退出而 JVM 继续运行；重启后面板按 `last_pid` 只会把实例标记为 `crashed`，无法接管该 JVM，需要人工结束进程后重新启动实例。
 12. 便携版没有安装器、Windows 服务、自动启动或自动更新；关闭控制台即停止面板，升级需手动替换并保留 `data/`。
 13. 便携 ZIP 未签名，Windows/杀软可能提示来源未知；需从 Releases 下载并核对 SHA256，解压到可写目录（不要放 `C:\Program Files`）。

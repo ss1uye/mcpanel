@@ -65,8 +65,10 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          name: MC Panel ${{ github.ref_name }}
+          # Every v* tag must ship a matching docs/releases/<tag>.md body.
+          body_path: docs/releases/${{ github.ref_name }}.md
           files: |
             release/mcpanel-*-win-x64.zip
             release/SHA256SUMS.txt
-          generate_release_notes: true
           fail_on_unmatched_files: true

@@ -26,15 +26,15 @@
 - 安全：CSP 使用每请求 nonce，WebSocket 仅允许当前 Host；反向代理需转发原始 Host 或 `X-Forwarded-Host`
 - 面板数据：设置页一键下载 SQLite 在线快照，或使用 `scripts/backup-panel-db.mjs`
 - 计划：列表与表单展示未来 3 次运行时间
-- 前端：路由级懒加载，图表与编辑器均按需加载
+- 前端：路由级懒加载，编辑器按需加载，sparkline 使用轻量 SVG
 - 发版：Windows x64 便携 ZIP，内置 Node 24，解压双击启动，无需预装 Node/npm
 
-v0.3 在 v0.2 的基础上提供了 Windows 便携发版；玩家、文件、配置、备份与计划仍在同一个面板内闭环。
+v0.3.1 是性能、稳定性与安全更新，无数据库结构变更；v0.3 系列提供 Windows 便携发版，玩家、文件、配置、备份与计划仍在同一个面板内闭环。
 
 ## 下载便携版（Windows x64）
 
 从 [GitHub Releases](https://github.com/ss1uye/mcpanel/releases/latest) 下载
-`mcpanel-0.3.0-win-x64.zip`，解压到有写权限的目录（例如 `D:\MC Panel`），双击
+`mcpanel-0.3.1-win-x64.zip`，解压到有写权限的目录（例如 `D:\MC Panel`），双击
 `start-panel.bat`，脚本会自动用 Edge 打开 `http://127.0.0.1:3000`。
 
 - 不需要安装 Node.js 或 npm；数据在包内 `data/`。
