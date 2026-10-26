@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -24,19 +24,38 @@ for (const required of ['apps/server/dist/index.js', 'apps/server/drizzle', 'app
   }
 }
 
+async function withRetry(operation, label) {
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const code = error?.code;
+      if (!['EBUSY', 'EPERM', 'ENOTEMPTY', 'EACCES'].includes(code) || attempt === 4) break;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+    }
+  }
+  throw new Error(`${label}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
 async function copyDir(source, destination) {
   await fsp.mkdir(path.dirname(destination), { recursive: true });
-  await fsp.cp(source, destination, {
-    recursive: true,
-    force: true,
-    dereference: true,
-    filter: (entry) => !entry.endsWith('.map'),
-  });
+  await withRetry(
+    () =>
+      fsp.cp(source, destination, {
+        recursive: true,
+        force: true,
+        dereference: true,
+        filter: (entry) => !entry.endsWith('.map'),
+      }),
+    `copy ${path.basename(source)}`,
+  );
 }
 
 async function copyFile(source, destination) {
   await fsp.mkdir(path.dirname(destination), { recursive: true });
-  await fsp.copyFile(source, destination);
+  await withRetry(() => fsp.copyFile(source, destination), `copy ${path.basename(source)}`);
 }
 
 function writeText(destination, text) {
@@ -46,15 +65,25 @@ function writeText(destination, text) {
 
 async function runtimeDependencies() {
   const args = ['ls', '--omit=dev', '--all', '--parseable', '--workspace=@mcpanel/server'];
-  const npmCli =
-    process.env.npm_execpath ??
-    path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
-  if (!fs.existsSync(npmCli)) throw new Error('找不到 npm-cli.js，请通过 npm run release:portable 执行');
-  const output = execFileSync(process.execPath, [npmCli, ...args], {
+  const candidates = [
+    process.env.npm_execpath,
+    path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ].filter((value) => typeof value === 'string' && value.endsWith('.js') && fs.existsSync(value));
+  const npmCli = candidates[0];
+  if (!npmCli) throw new Error('找不到 npm-cli.js，请通过 npm run release:portable 执行');
+  const result = spawnSync(process.execPath, [npmCli, ...args], {
     cwd: repoRoot,
     encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+  const output = result.stdout ?? '';
+  if (result.status !== 0) {
+    console.warn(`npm ls exited with ${result.status}; using its dependency list`);
+    if (result.stderr) console.warn(result.stderr.trim());
+  }
+  if (!output.trim()) {
+    throw new Error(`npm ls 没有输出依赖列表：${result.stderr ?? result.error ?? 'unknown error'}`);
+  }
   const copied = new Set();
   for (const line of output.split(/\r?\n/)) {
     const absolute = line.trim();
@@ -68,6 +97,7 @@ async function runtimeDependencies() {
     copied.add(relative);
     await copyDir(absolute, path.join(staging, relative));
   }
+  if (copied.size === 0) throw new Error('没有找到服务端生产依赖');
   return copied.size;
 }
 
@@ -97,8 +127,10 @@ await copyFile(path.join(repoRoot, 'packaging/THIRD_PARTY_NOTICES.txt'), path.jo
 await copyFile(process.execPath, path.join(staging, 'node/node.exe'));
 await copyFile(path.join(repoRoot, 'packaging/licenses/node-LICENSE.txt'), path.join(staging, 'node/LICENSE'));
 
+console.log('[package] collecting runtime dependencies...');
 const dependencyCount = await runtimeDependencies();
 
+console.log('[package] creating zip...');
 execFileSync('tar.exe', ['-a', '-c', '-f', path.basename(zipPath), folderName], {
   cwd: releaseRoot,
   stdio: 'inherit',

@@ -35,8 +35,26 @@ jobs:
         shell: bash
         run: |
           node -e "const p=require('./package.json'); const tag=process.env.GITHUB_REF_NAME; if (tag !== 'v'+p.version) { console.error('tag '+tag+' != v'+p.version); process.exit(1); }"
-      - run: npm run release:portable
-      - run: npm run smoke:portable
+      - name: Build portable package
+        shell: pwsh
+        run: |
+          $lines = & npm run release:portable 2>&1
+          $code = $LASTEXITCODE
+          $lines | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) {
+            $lines | Select-Object -Last 20 | ForEach-Object { Write-Host "::error::$_" }
+            exit $code
+          }
+      - name: Smoke portable package
+        shell: pwsh
+        run: |
+          $lines = & npm run smoke:portable 2>&1
+          $code = $LASTEXITCODE
+          $lines | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) {
+            $lines | Select-Object -Last 20 | ForEach-Object { Write-Host "::error::$_" }
+            exit $code
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: mcpanel-portable-windows-x64

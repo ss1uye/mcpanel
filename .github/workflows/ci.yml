@@ -50,10 +50,26 @@ jobs:
       - run: npm run build
       - name: Package portable (Windows)
         if: runner.os == 'Windows'
-        run: npm run release:portable
+        shell: pwsh
+        run: |
+          $lines = & npm run release:portable 2>&1
+          $code = $LASTEXITCODE
+          $lines | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) {
+            $lines | Select-Object -Last 20 | ForEach-Object { Write-Host "::error::$_" }
+            exit $code
+          }
       - name: Smoke portable (Windows)
         if: runner.os == 'Windows'
-        run: npm run smoke:portable
+        shell: pwsh
+        run: |
+          $lines = & npm run smoke:portable 2>&1
+          $code = $LASTEXITCODE
+          $lines | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) {
+            $lines | Select-Object -Last 20 | ForEach-Object { Write-Host "::error::$_" }
+            exit $code
+          }
 
   e2e:
     name: e2e (chromium)
