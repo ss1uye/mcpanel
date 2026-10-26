@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveDesktopPaths, resolveUserDataDir } from '../src/paths';
@@ -17,8 +18,48 @@ describe('desktop paths', () => {
 
   it('uses a unique temp directory in smoke mode', () => {
     expect(
-      resolveUserDataDir({ appDataDir: 'C:\\Users\\u\\AppData\\Roaming', smokeTest: true, tempDir: 'C:\\Temp', pid: 42 }),
-    ).toBe(path.join('C:\\Temp', 'mcpanel-desktop-smoke-42'));
+      resolveUserDataDir({
+        appDataDir: 'C:\\Users\\u\\AppData\\Roaming',
+        smokeTest: true,
+        tempDir: 'C:\\Temp',
+        pid: 42,
+        runId: 'test',
+      }),
+    ).toBe(path.join('C:\\Temp', 'mcpanel-desktop-smoke-42-test'));
+  });
+
+  it('falls back to the OS temp directory and returns an absolute smoke path', () => {
+    const userDataDir = resolveUserDataDir({
+      appDataDir: 'C:\\Users\\u\\AppData\\Roaming',
+      smokeTest: true,
+      pid: 42,
+    });
+    expect(path.isAbsolute(userDataDir)).toBe(true);
+    expect(userDataDir.startsWith(path.resolve(os.tmpdir()))).toBe(true);
+    expect(path.basename(userDataDir)).toMatch(/^mcpanel-desktop-smoke-42-[0-9a-f]{8}$/);
+  });
+
+  it('prefers the smoke directory over the portable directory', () => {
+    expect(
+      resolveUserDataDir({
+        portableExecutableDir: 'D:\\MC Panel',
+        appDataDir: 'C:\\Users\\u\\AppData\\Roaming',
+        smokeTest: true,
+        tempDir: 'C:\\Temp',
+        pid: 42,
+        runId: 'test',
+      }),
+    ).toBe(path.join('C:\\Temp', 'mcpanel-desktop-smoke-42-test'));
+  });
+
+  it('generates distinct smoke directories for runs without an explicit run id', () => {
+    const input = {
+      appDataDir: 'C:\\Users\\u\\AppData\\Roaming',
+      smokeTest: true,
+      tempDir: 'C:\\Temp',
+      pid: 42,
+    };
+    expect(resolveUserDataDir(input)).not.toBe(resolveUserDataDir(input));
   });
 
   it('derives data, preferences, runtime and log paths', () => {

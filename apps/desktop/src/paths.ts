@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import os from 'node:os';
 import path from 'node:path';
 
 export interface DesktopPaths {
@@ -14,11 +16,14 @@ export interface UserDataInput {
   smokeTest?: boolean;
   tempDir?: string;
   pid?: number;
+  runId?: string;
 }
 
 export function resolveUserDataDir(input: UserDataInput): string {
   if (input.smokeTest) {
-    return path.join(input.tempDir ?? '', `mcpanel-desktop-smoke-${input.pid ?? process.pid}`);
+    const base = path.resolve(input.tempDir ?? os.tmpdir());
+    const suffix = input.runId ?? randomUUID().slice(0, 8);
+    return path.join(base, `mcpanel-desktop-smoke-${input.pid ?? process.pid}-${suffix}`);
   }
   if (input.portableExecutableDir) return path.join(input.portableExecutableDir, 'mcpanel-data');
   return path.join(input.appDataDir, 'MC Panel');
