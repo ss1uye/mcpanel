@@ -68,7 +68,7 @@ mcpanel-0.3.0-win-x64/
 5. 复制 `process.execPath` 为 `node/node.exe`，复制 Node LICENSE；
 6. 通过 `npm ls --omit=dev --all --parseable --workspace=@mcpanel/server` 找出服务端生产依赖，
    跳过 `@mcpanel/*` 工作区链接，按相对 `node_modules` 路径复制；
-7. 用 PowerShell `Compress-Archive` 生成 ZIP（避免 PATH 中的 tar 实现差异）；
+7. 用 `archiver` 的 `ZipArchive` 生成标准 ZIP（正斜杠路径，避免 PATH 中的 tar 实现差异）；
 8. 用 Node `crypto` 生成 `SHA256SUMS.txt`；
 9. 打印 ZIP 路径与大小。
 

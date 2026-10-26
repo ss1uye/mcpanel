@@ -27,7 +27,7 @@
   - 复制 `apps/server/dist`、`apps/server/drizzle`、`apps/web/dist`、`package.json`、`apps/server/package.json`、`.env.example`、`LICENSE`、打包模板；
   - `process.execPath` → `node/node.exe`；
   - `npm ls --omit=dev --all --parseable --workspace=@mcpanel/server` → 复制生产依赖（跳过 `@mcpanel` 工作区链接）；
-  - PowerShell `Compress-Archive` 生成 ZIP，Node crypto 生成 `SHA256SUMS.txt`。
+  - `archiver` 的 `ZipArchive` 生成标准 ZIP，Node crypto 生成 `SHA256SUMS.txt`。
 - [ ] 编写 `start-panel.bat`：首次复制 `.env.example`、读取 host/port、2 秒后打开 Edge、前台运行内置 node、退出后 pause。
 - [ ] 运行 `npm run release:portable`，检查 ZIP 结构与大小，确认无 `.env`/`data/`/测试文件。
 

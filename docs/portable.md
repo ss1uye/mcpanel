@@ -85,5 +85,5 @@ node\node.exe scripts\reset-password.mjs admin
 - ZIP 未签名，Windows/浏览器可能提示来源未知；请从本仓库的 Releases 下载并核对 SHA256。
 - 便携版以当前 Windows 用户身份运行，不提升权限，不注册服务。
 - 没有自动启动、自动更新、服务守护；关闭控制台即停止面板。
-- 包体积约 53 MB（内置 Node 24 和运行依赖）。
+- 包体积约 55 MB（内置 Node 24 和运行依赖）。
 - 包内不包含源码、测试、`.env`、`secret.key` 或任何真实凭据。

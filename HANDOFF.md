@@ -123,7 +123,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - 面板数据：设置页一键下载 SQLite 在线快照；CLI 可在面板运行时备份。
 - 计划：列表与表单展示未来 3 次运行时间。
 - 前端：路由级懒加载；首屏入口 `index` 221.6 kB + `react` 246.4 kB（gzip 66.2 + 78.6 kB），`charts` 314.1 kB、`CodeEditor` 437.0 kB 按需加载。
-- 发版：Windows x64 便携 ZIP（内置 Node 24，约 53 MB），双击 `start-panel.bat`，用 Edge 打开；数据在包内 `data/`。
+- 发版：Windows x64 便携 ZIP（内置 Node 24，约 55 MB），双击 `start-panel.bat`，用 Edge 打开；数据在包内 `data/`。
 
 ## 9. 已知限制（可接受，未阻塞 v0.3）
 
@@ -140,7 +140,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 11. 面板进程异常退出时，Windows 上启动器 `cmd.exe` 可能先退出而 JVM 继续运行；重启后面板按 `last_pid` 只会把实例标记为 `crashed`，无法接管该 JVM，需要人工结束进程后重新启动实例。
 12. 便携版没有安装器、Windows 服务、自动启动或自动更新；关闭控制台即停止面板，升级需手动替换并保留 `data/`。
 13. 便携 ZIP 未签名，Windows/杀软可能提示来源未知；需从 Releases 下载并核对 SHA256，解压到可写目录（不要放 `C:\Program Files`）。
-14. 便携包约 53 MB（含 Node 24 与生产依赖）；首次启动在包内创建 `data/`。
+14. 便携包约 55 MB（含 Node 24 与生产依赖）；首次启动在包内创建 `data/`。
 
 ## 10. 建议的下一步
 

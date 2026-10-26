@@ -1,9 +1,11 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import { createWriteStream } from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ZipArchive } from 'archiver';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const releaseRoot = path.join(repoRoot, 'release');
@@ -131,17 +133,20 @@ console.log('[package] collecting runtime dependencies...');
 const dependencyCount = await runtimeDependencies();
 
 console.log('[package] creating zip...');
-const psQuote = (value) => `'${value.replaceAll("'", "''")}'`;
-execFileSync(
-  'powershell.exe',
-  [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    `Compress-Archive -LiteralPath ${psQuote(staging)} -DestinationPath ${psQuote(zipPath)} -Force`,
-  ],
-  { stdio: 'inherit' },
-);
+const output = createWriteStream(zipPath);
+const archive = new ZipArchive({ zlib: { level: 9 } });
+const zipDone = new Promise((resolve, reject) => {
+  output.on('close', resolve);
+  output.on('error', reject);
+  archive.on('error', reject);
+  archive.on('warning', (error) => {
+    if (error.code !== 'ENOENT') reject(error);
+  });
+});
+archive.pipe(output);
+archive.directory(staging, folderName);
+await archive.finalize();
+await zipDone;
 
 const hash = createHash('sha256');
 await new Promise((resolve, reject) => {
