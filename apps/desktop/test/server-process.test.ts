@@ -175,6 +175,36 @@ describe('ServerProcess', () => {
     expect(server.pid).toBeNull();
   });
 
+  it('ignores late events from a superseded child', async () => {
+    const first = new FakeChild();
+    first.kill = vi.fn(() => {
+      first.exitCode = 1; // simulate a stuck child that kill did not fully reap
+    });
+    const second = new FakeChild();
+    second.pid = 5252;
+    let spawnCount = 0;
+    const spawnFn = vi.fn((..._args: Parameters<typeof spawn>): ChildProcess => {
+      spawnCount += 1;
+      return (spawnCount === 1 ? first : second) as unknown as ChildProcess;
+    });
+    const server = new ServerProcess({
+      ...options,
+      waitHealth: async () => spawnCount > 1,
+      spawnFn: spawnFn as unknown as typeof spawn,
+    });
+
+    await expect(server.start()).rejects.toThrow(/启动失败/);
+    expect(server.pid).toBeNull();
+    await server.start();
+    expect(server.pid).toBe(5252);
+
+    const exits = vi.fn();
+    server.on('exit', exits);
+    first.emit('exit', 9);
+    expect(exits).not.toHaveBeenCalled();
+    expect(server.pid).toBe(5252);
+  });
+
   it('sends shutdown and resolves after exit without emitting a crash', async () => {
     const child = new FakeChild();
     const spawned = fakeSpawn(child);

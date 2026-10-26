@@ -119,6 +119,7 @@ export class ServerProcess extends EventEmitter {
       const logStream = fs.createWriteStream(this.options.logFile, { flags: 'a' });
       this.logStream = logStream;
       logStream.on('error', (error) => {
+        if (this.logStream !== logStream) return;
         this.emit('server-error', error);
         this.closeLog();
       });
@@ -136,9 +137,12 @@ export class ServerProcess extends EventEmitter {
         throw error;
       }
       this.child = child;
+      const isCurrent = (): boolean => this.child === child;
       child.stdout?.pipe(logStream, { end: false });
       child.stderr?.pipe(logStream, { end: false });
-      child.on('close', () => this.closeLog());
+      child.on('close', () => {
+        if (isCurrent()) this.closeLog();
+      });
 
       let failStart!: (error: Error) => void;
       const failure = new Promise<never>((_resolve, reject) => {
@@ -147,8 +151,11 @@ export class ServerProcess extends EventEmitter {
       this.startFailure = failStart;
       void failure.catch(() => undefined);
 
-      child.on('exit', (code) => this.handleExit(code));
+      child.on('exit', (code) => {
+        if (isCurrent()) this.handleExit(code);
+      });
       child.on('error', (error) => {
+        if (!isCurrent()) return;
         this.emit('server-error', error);
         if (this.state === 'starting') {
           this.startFailure?.(
