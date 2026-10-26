@@ -25,7 +25,7 @@ describe('desktop paths', () => {
         pid: 42,
         runId: 'test',
       }),
-    ).toBe(path.join('C:\\Temp', 'mcpanel-desktop-smoke-42-test'));
+    ).toBe(path.join(path.resolve('C:\\Temp'), 'mcpanel-desktop-smoke-42-test'));
   });
 
   it('falls back to the OS temp directory and returns an absolute smoke path', () => {
@@ -49,7 +49,7 @@ describe('desktop paths', () => {
         pid: 42,
         runId: 'test',
       }),
-    ).toBe(path.join('C:\\Temp', 'mcpanel-desktop-smoke-42-test'));
+    ).toBe(path.join(path.resolve('C:\\Temp'), 'mcpanel-desktop-smoke-42-test'));
   });
 
   it('generates distinct smoke directories for runs without an explicit run id', () => {
