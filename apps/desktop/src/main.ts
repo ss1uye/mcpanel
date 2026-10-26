@@ -327,6 +327,8 @@ async function run(): Promise<void> {
       await server?.stop(12_000).catch(() => undefined);
       if (!keepRuntimeOnQuit) clearRuntime(paths.runtimeFile);
       if (isSmoke) fs.rmSync(userDataDir, { recursive: true, force: true });
+      tray?.destroy();
+      tray = null;
       mainWindow?.destroy();
       app.quit();
     })();
