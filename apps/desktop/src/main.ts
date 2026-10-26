@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
 import type { Tray } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -264,6 +264,11 @@ async function run(userDataDir: string): Promise<void> {
         savePreferences(paths.preferencesFile, preferences);
         applyLoginItem();
       },
+      getMinimizeToTray: () => preferences.minimizeToTray,
+      setMinimizeToTray: (enabled) => {
+        preferences = { ...preferences, minimizeToTray: enabled };
+        savePreferences(paths.preferencesFile, preferences);
+      },
       quit: () => app.quit(),
     });
   };
@@ -370,6 +375,7 @@ async function run(userDataDir: string): Promise<void> {
 
   await app.whenReady();
   app.setAppUserModelId('com.ss1uye.mcpanel');
+  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   applyLoginItem();
   sweepSmokeDirs();
 

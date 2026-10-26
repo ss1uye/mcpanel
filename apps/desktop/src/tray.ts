@@ -10,6 +10,8 @@ export interface TrayOptions {
   logDir: string;
   getAutoLaunch: () => boolean;
   setAutoLaunch: (enabled: boolean) => void;
+  getMinimizeToTray: () => boolean;
+  setMinimizeToTray: (enabled: boolean) => void;
   quit: () => void;
 }
 
@@ -32,6 +34,15 @@ export function createTray(options: TrayOptions): Tray {
           checked: options.getAutoLaunch(),
           click: (item) => {
             options.setAutoLaunch(item.checked);
+            refresh();
+          },
+        },
+        {
+          label: '关闭窗口时最小化到托盘',
+          type: 'checkbox',
+          checked: options.getMinimizeToTray(),
+          click: (item) => {
+            options.setMinimizeToTray(item.checked);
             refresh();
           },
         },
