@@ -1,10 +1,11 @@
 # MC Panel
 
 [![CI](https://github.com/ss1uye/mcpanel/actions/workflows/ci.yml/badge.svg)](https://github.com/ss1uye/mcpanel/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ss1uye/mcpanel?display_name=tag)](https://github.com/ss1uye/mcpanel/releases/latest)
 
-自托管的 Minecraft Java 模组服管理面板。第一版面向单管理员、单机节点，纳管已经安装好的 Fabric / Forge / NeoForge 服务器目录，不接管安装流程。
+自托管的 Minecraft Java 模组服管理面板。当前版本面向单管理员、单机节点，纳管已经安装好的 Fabric / Forge / NeoForge 服务器目录，不接管安装流程。
 
-## 当前阶段（v0.2）
+## 当前阶段（v0.3）
 
 - 首次初始化、登录、会话与 CSRF 防护
 - 纳管已有服务器目录（自动探测启动脚本、Java、server.properties、EULA、RCON 端口）
@@ -26,14 +27,27 @@
 - 面板数据：设置页一键下载 SQLite 在线快照，或使用 `scripts/backup-panel-db.mjs`
 - 计划：列表与表单展示未来 3 次运行时间
 - 前端：路由级懒加载，图表与编辑器均按需加载
+- 发版：Windows x64 便携 ZIP，内置 Node 24，解压双击启动，无需预装 Node/npm
 
-v0.2 在阶段 1–3 的基础上补齐了编辑体验、CSP、面板库备份与前端分包；玩家、文件、配置、备份与计划仍在同一个面板内闭环。
+v0.3 在 v0.2 的基础上提供了 Windows 便携发版；玩家、文件、配置、备份与计划仍在同一个面板内闭环。
+
+## 下载便携版（Windows x64）
+
+从 [GitHub Releases](https://github.com/ss1uye/mcpanel/releases/latest) 下载
+`mcpanel-0.3.0-win-x64.zip`，解压到有写权限的目录（例如 `D:\MC Panel`），双击
+`start-panel.bat`，脚本会自动用 Edge 打开 `http://127.0.0.1:3000`。
+
+- 不需要安装 Node.js 或 npm；数据在包内 `data/`。
+- 关闭启动窗口即停止面板，不会停止 Minecraft 服务器。
+- 升级时保留 `data/`；详见 [`docs/portable.md`](docs/portable.md)。
+- ZIP 未签名，Windows 可能提示“来自网络”；请从本仓库 Releases 下载并核对 SHA256。
+
+下面的“环境要求/开发/生产”章节是针对**源码部署**的；便携版用户可以直接跳过。
 
 ## 环境要求
 
-- Node.js 24.11 及以上（`package.json` 的 `engines` 已强制）
-- npm 11.16+（用于依赖安装脚本白名单校验）
-- Windows 10/11 或主流 Linux
+- 源码运行：Node.js 24.11 及以上、npm 11.16+（`engines` 已强制）
+- 便携版：Windows 10/11 x64，无需 Node.js/npm
 - 同一台机器上已安装 Java 与 Minecraft 服务端
 
 ## 开发
@@ -50,12 +64,14 @@ npm run dev
 依赖安装会触发 `argon2`、`better-sqlite3`、`esbuild` 的构建脚本，npm 11 需要审批：
 `npm install-scripts approve`（白名单已写入根 `package.json` 的 `allowScripts`）。
 
-## 生产
+## 生产（源码部署）
 
 ```bash
 npm run build
 npm start
 ```
+
+Windows 便携版见上文「下载便携版」；下面的步骤适用于从源码部署或需要 systemd 的 Linux 服务器。
 
 访问 `http://127.0.0.1:3000`，首次打开进入初始化页面。生产构建由 Fastify 托管 `apps/web/dist`，
 刷新任意前端路由不会 404；未设置 `NODE_ENV` 时按 `production` 运行。
@@ -143,6 +159,8 @@ npm run typecheck
 npm test
 npm run lint
 npm run test:e2e     # Playwright 冒烟（Chromium，需先 npx playwright install chromium）
+npm run release:portable   # Windows：生成便携 ZIP
+npm run smoke:portable     # Windows：解压 ZIP 并真实启动验证
 ```
 
 ## 升级

@@ -1,6 +1,6 @@
 {
   "name": "@mcpanel/server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,7 @@
     "@fastify/rate-limit": "^10.0.0",
     "@fastify/static": "^8.0.0",
     "@fastify/websocket": "^11.0.0",
-    "@mcpanel/shared": "0.2.0",
+    "@mcpanel/shared": "0.3.0",
     "archiver": "^8.0.0",
     "argon2": "^0.44.0",
     "better-sqlite3": "^12.0.0",

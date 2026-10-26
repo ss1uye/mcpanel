@@ -1,11 +1,11 @@
 # MC Panel 交接文档
 
-> 最后更新：2026-10-24 · 版本 v0.2.0 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树干净
+> 最后更新：2026-10-26 · 版本 v0.3.0 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树干净
 > 用途：上下文压缩或换人接手后，凭本文档即可继续，无需重新探索。
 
 ## 1. 一句话状态
 
-自托管 Minecraft Java 模组服管理面板（v0.2，单管理员/单机）：阶段 1–3 与 v0.2 打磨（CSP nonce、面板库快照、下载校验、计划预览、CodeMirror、路由分包）全部完成。测试、类型、Lint、构建、Playwright 冒烟全绿；CI 双平台通过。当前在本地开发环境运行，管理员已初始化，尚未纳管任何实例。
+自托管 Minecraft Java 模组服管理面板（v0.3，单管理员/单机）：阶段 1–3、v0.2 打磨与 v0.3 Windows 便携发版全部完成。测试、类型、Lint、构建、Playwright 冒烟、便携包冒烟全绿；CI 双平台 + Ubuntu e2e + gitleaks 通过。本地已纳管真实实例 `fuwuduan`（Forge 1.20.1-47.4.0，使用便携 JRE 17）。
 
 ## 2. 恢复工作（三步）
 
@@ -24,6 +24,8 @@ npm test               # server 225 / web 52 / shared 12
 npm run lint
 npm run build
 npm run test:e2e       # Playwright Chromium，约 10s
+npm run release:portable   # Windows x64 便携 ZIP
+npm run smoke:portable     # 解压 ZIP 后真实启动并检查 health/首页/数据
 ```
 
 ## 3. 当前会话的运行状态（压缩后可能已失效）
@@ -49,6 +51,9 @@ npm run test:e2e       # Playwright Chromium，约 10s
 | `docs/superpowers/plans/HANDOFF-phase2.md` | 阶段 2 收尾与手工验收 |
 | `docs/superpowers/plans/HANDOFF-phase3.md` | 阶段 3 收尾、审查结论、遗留风险 |
 | `docs/superpowers/plans/HANDOFF-phase4.md` | v0.2 收尾、决策与验证记录 |
+| `docs/superpowers/specs/2026-10-26-mcpanel-portable-release-design.md` | v0.3 便携发版设计 |
+| `docs/superpowers/plans/2026-10-26-mcpanel-portable-release.md` | v0.3 便携发版计划 |
+| `docs/portable.md` | Windows 便携版下载、启动、升级、迁移与排障 |
 | `README.md` | 安装/开发/生产/备份与恢复/定时任务/安全/升级/忘记密码 |
 | `docs/systemd.md` | Linux 部署 |
 
@@ -84,6 +89,7 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - **启动命令**：POSIX 下驱动会把裸 `start.sh` / `run.sh` 补成 `./…` 再交给 `/bin/sh`，避免 PATH 不含当前目录导致 `command not found`。
 - **Java 路径**：实例的 `java_path` 既用于启动前校验，也会在启动时把其所在目录前置到 `PATH` 并设置 `JAVA_HOME`；启动阶段出现 `Unsupported class file major version` / `UnsupportedClassVersionError` 会结束残留启动器并标记 `crashed`。
 - **指标采样**：单次采集失败（例如 Windows 上的 `EBUSY`）只记录 `warn` 并跳过本次，不再触发进程级 unhandledRejection 导致面板退出。
+- **便携发版**：`npm run release:portable` 生成 `release/mcpanel-<version>-win-x64.zip`；包内含 `process.execPath` 对应的 Node 24、服务端生产依赖、前端/后端构建、`start-panel.bat`、`scripts/reset-password.mjs`、Node 许可证；不含 `.env`、`data/`、测试或源码。`npm run smoke:portable` 解压并真实启动验证。
 - **计划任务**：croner、独立时区、重叠跳过、不补跑、每计划保留 100 条运行记录；删除实例前先 `forgetInstance`；列表/创建/更新返回 `nextRuns`（3 条），`GET /api/instances/:id/schedules/preview` 供表单预览。
 - **CSP**：每请求 nonce；`style-src 'self' 'nonce-…'`；`connect-src 'self' ws://<Host> wss://<Host>`；`TRUST_PROXY=true` 时优先 `X-Forwarded-Host`。HTML 模板 `apps/web/index.html` 的 `__CSP_NONCE__` 由服务端按请求替换（`no-store`）；CodeMirror 用 `EditorView.cspNonce`，Radix 动态样式通过 `window.__webpack_nonce__`。
 - **面板库快照**：`PanelBackupService` 使用 better-sqlite3 `backup()` 写入 `data/tmp/panel-*.db`，下载流关闭后删除；CLI 为 `scripts/backup-panel-db.mjs`；审计动作 `panel.backup`。
@@ -95,9 +101,11 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 ## 7. 仓库配套
 
 - 许可证：MIT（`LICENSE`）。
-- CI：`.github/workflows/ci.yml`，`main` push 与 PR 触发三个 job（`concurrency` 同分支去重，npm 11.19.1）：
-  `static`（ubuntu：typecheck + lint）、`test`（ubuntu + windows 矩阵：test + build）、
-  `e2e`（ubuntu：Playwright Chromium，假服务端 start 脚本按平台生成）。
+- CI：`.github/workflows/ci.yml`，`main` push 与 PR 触发四个 job（`concurrency` 同分支去重，npm 11.19.1）：
+  `static`（ubuntu：typecheck + lint）、`test`（ubuntu + windows 矩阵：test + build；Windows 额外打包/冒烟便携包）、
+  `e2e`（ubuntu：Playwright Chromium）、`secret-scan`（gitleaks 全历史）。
+- 发布：`.github/workflows/release.yml`，`v*` tag 或手动触发，在 Windows 上构建便携 ZIP、冒烟、上传 artifact；tag 时创建 GitHub Release（ZIP + SHA256SUMS）。
+- 密钥扫描：`.gitleaks.toml`；测试/文档中的已知测试凭据通过白名单排除。
 - 仓库描述与 topics 需在 GitHub 网页设置（API 写入需要 token，本项目只用 SSH）。
 
 ## 8. 已验证的能力
@@ -115,8 +123,9 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - 面板数据：设置页一键下载 SQLite 在线快照；CLI 可在面板运行时备份。
 - 计划：列表与表单展示未来 3 次运行时间。
 - 前端：路由级懒加载；首屏入口 `index` 221.6 kB + `react` 246.4 kB（gzip 66.2 + 78.6 kB），`charts` 314.1 kB、`CodeEditor` 437.0 kB 按需加载。
+- 发版：Windows x64 便携 ZIP（内置 Node 24，约 161 MB），双击 `start-panel.bat`，用 Edge 打开；数据在包内 `data/`。
 
-## 9. 已知限制（可接受，未阻塞 v0.2）
+## 9. 已知限制（可接受，未阻塞 v0.3）
 
 1. 备份 manifest 只做结构/路径校验，未与数据库存证做哈希比对；面板生成的备份可信，手工替换 zip 仍会被路径校验拦截。
 2. 运行中备份与「面板之外的进程终止」存在窄竞态；面板内的启停已被实例锁串行化。
@@ -129,9 +138,13 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 9. 登录限速按 `request.ip`：`TRUST_PROXY=true` 且前面没有净化 `X-Forwarded-For` 的反代时可被伪造头绕过；共享出口 IP 时可反向锁死管理员 15 分钟。
 10. WS 连接在会话吊销（登出/改密码）后仍存活到断开为止；前端上传无进度/不可取消，WS 心跳不校验 pong（休眠恢复后连接可能假死约 10 分钟）。
 11. 面板进程异常退出时，Windows 上启动器 `cmd.exe` 可能先退出而 JVM 继续运行；重启后面板按 `last_pid` 只会把实例标记为 `crashed`，无法接管该 JVM，需要人工结束进程后重新启动实例。
+12. 便携版没有安装器、Windows 服务、自动启动或自动更新；关闭控制台即停止面板，升级需手动替换并保留 `data/`。
+13. 便携 ZIP 未签名，Windows/杀软可能提示来源未知；需从 Releases 下载并核对 SHA256，解压到可写目录（不要放 `C:\Program Files`）。
+14. 便携包约 161 MB（含 Node 24 与生产依赖）；首次启动在包内创建 `data/`。
 
 ## 10. 建议的下一步
 
 1. 纳管一个真实测试服，跑一遍手工验收矩阵（规格 §21.4），重点：Windows 中文/空格路径、面板重启时的孤儿检测、运行中严格备份、恢复、反向代理下的 CSP/`X-Forwarded-Host`。
 2. 可选增强：备份 manifest 的 SHA-256 存证与完整性校验、备份到外部存储（S3/WebDAV）、告警 Webhook、远程节点/多用户（规格 §24）。
-3. 若继续用 AI 代理：先读本文件，再读 `HANDOFF-phase4.md` 与 v0.2 计划，按“测试先行 + 小步提交”的方式推进。
+3. 发版增强（按需）：代码签名、Windows 安装器/服务、自动更新、Linux 包或 Docker。
+4. 若继续用 AI 代理：先读本文件，再读 `HANDOFF-phase4.md`、v0.3 便携发版计划与 `docs/portable.md`，按“测试先行 + 小步提交”的方式推进。
