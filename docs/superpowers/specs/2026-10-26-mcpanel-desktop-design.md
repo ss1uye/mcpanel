@@ -61,10 +61,13 @@
 
 ```text
 %APPDATA%\MC Panel\
-├─ data\                       # DATA_DIR：panel.db、secret.key、backups、logs
+├─ data\                       # DATA_DIR
+│  ├─ panel.db
+│  ├─ secret.key
+│  ├─ backups\
+│  └─ logs\                    # 面板日志 + desktop.log（Electron/子进程输出）
 ├─ desktop.json                # 桌面偏好：自启动、关闭到托盘
-├─ runtime.json                # 上次启动的 pid/port，用于孤儿检测
-└─ logs\desktop.log            # Electron 与子进程的标准输出/错误
+└─ runtime.json                # 上次启动的 pid/port，用于孤儿检测
 ```
 
 便携模式（检测到 `PORTABLE_EXECUTABLE_DIR`）把上述用户数据改到
