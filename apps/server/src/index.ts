@@ -9,6 +9,7 @@ import { assertSafeBind, loadConfig } from './config';
 import { openDatabase } from './db/client';
 import { runMigrations, seedLocalNode } from './db/migrate';
 import { users } from './db/schema';
+import { registerDesktopIpc } from './desktop-ipc';
 import { createLogger } from './logger';
 import { LocalNodeDriver } from './nodes/local-driver';
 import { PathSandbox } from './nodes/path-sandbox';
@@ -169,6 +170,8 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
   }
   process.exit(exitCode);
 }
+
+registerDesktopIpc((reason) => void shutdown(reason, 0));
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => void shutdown(signal, 0));
