@@ -55,6 +55,8 @@ async function run(): Promise<void> {
   let quitting = false;
   let recovering = false;
   let keepRuntimeOnQuit = false;
+  let cleanupStarted = false;
+  let exitCode = 0;
 
   const log = (message: string): void => {
     const line = `${new Date().toISOString()} ${message}\n`;
@@ -64,6 +66,25 @@ async function run(): Promise<void> {
       // Logging must never take the shell down.
     }
     if (!app.isPackaged) console.log(message);
+  };
+
+  const sweepSmokeDirs = (): void => {
+    if (isSmoke) return;
+    try {
+      for (const name of fs.readdirSync(os.tmpdir())) {
+        if (!name.startsWith('mcpanel-desktop-smoke-')) continue;
+        const dir = path.join(os.tmpdir(), name);
+        try {
+          if (Date.now() - fs.statSync(dir).mtimeMs > 24 * 60 * 60 * 1000) {
+            fs.rmSync(dir, { recursive: true, force: true });
+          }
+        } catch {
+          // Locked by a running Chromium or already gone.
+        }
+      }
+    } catch {
+      // Temporary directory cleanup is best effort.
+    }
   };
 
   const probeHealth = async (port: number): Promise<boolean> => {
@@ -233,7 +254,7 @@ async function run(): Promise<void> {
         mainWindow.focus();
       },
       hideWindow: () => mainWindow?.hide(),
-      panelUrl: panelOrigin,
+      getPanelUrl: () => panelOrigin,
       dataDir: paths.dataDir,
       logDir: path.dirname(paths.desktopLogFile),
       getAutoLaunch: () => preferences.autoLaunch,
@@ -311,6 +332,7 @@ async function run(): Promise<void> {
 
   app.on('second-instance', () => {
     if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
   });
@@ -320,23 +342,35 @@ async function run(): Promise<void> {
   });
 
   app.on('before-quit', (event) => {
-    if (quitting) return;
     event.preventDefault();
+    if (cleanupStarted) return;
+    cleanupStarted = true;
     quitting = true;
     void (async () => {
-      await server?.stop(12_000).catch(() => undefined);
-      if (!keepRuntimeOnQuit) clearRuntime(paths.runtimeFile);
-      if (isSmoke) fs.rmSync(userDataDir, { recursive: true, force: true });
-      tray?.destroy();
-      tray = null;
-      mainWindow?.destroy();
-      app.quit();
+      try {
+        await server?.stop(12_000).catch(() => undefined);
+        if (!keepRuntimeOnQuit) clearRuntime(paths.runtimeFile);
+        if (isSmoke) {
+          // Chromium still owns the userData root; only remove the panel data here.
+          try {
+            fs.rmSync(paths.dataDir, { recursive: true, force: true });
+          } catch {
+            // Stale temp directories are swept on a later launch.
+          }
+        }
+      } finally {
+        tray?.destroy();
+        tray = null;
+        mainWindow?.destroy();
+        app.exit(exitCode);
+      }
     })();
   });
 
   await app.whenReady();
   app.setAppUserModelId('com.ss1uye.mcpanel');
   applyLoginItem();
+  sweepSmokeDirs();
 
   if (!(await ensureData())) {
     app.quit();
@@ -367,7 +401,8 @@ async function run(): Promise<void> {
       log(`[smoke] ready ${panelOrigin}`);
     } catch (error) {
       log(`[smoke] failed: ${error instanceof Error ? error.message : String(error)}`);
-      app.exit(1);
+      exitCode = 1;
+      app.quit();
       return;
     }
     app.quit();

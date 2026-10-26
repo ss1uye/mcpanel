@@ -5,7 +5,7 @@ export interface TrayOptions {
   getWindowVisible: () => boolean;
   showWindow: () => void;
   hideWindow: () => void;
-  panelUrl: string;
+  getPanelUrl: () => string;
   dataDir: string;
   logDir: string;
   getAutoLaunch: () => boolean;
@@ -21,7 +21,7 @@ export function createTray(options: TrayOptions): Tray {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: '打开面板', click: options.showWindow },
-        { label: '在浏览器中打开', click: () => void shell.openExternal(options.panelUrl) },
+        { label: '在浏览器中打开', click: () => void shell.openExternal(options.getPanelUrl()) },
         { type: 'separator' },
         { label: '打开数据目录', click: () => void shell.openPath(options.dataDir) },
         { label: '打开日志目录', click: () => void shell.openPath(options.logDir) },
