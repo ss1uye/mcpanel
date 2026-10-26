@@ -1,12 +1,16 @@
 # Windows 便携版
 
 > 适用于 Windows 10/11 x64。无需安装 Node.js、npm 或数据库。
+>
+> 如果你想要桌面应用，请优先使用 Releases 中的 `MC-Panel-Setup-0.4.0.exe` 或
+> `MC-Panel-0.4.0-portable.exe`。本文档下面的 ZIP 是服务器便携版（双击
+> `start-panel.bat`，用浏览器打开）。
 
 ## 下载
 
 从 [GitHub Releases](https://github.com/ss1uye/mcpanel/releases/latest) 下载：
 
-- `mcpanel-0.3.1-win-x64.zip`
+- `mcpanel-0.4.0-win-x64.zip`
 - `SHA256SUMS.txt`（可选，用于校验）
 
 ## 解压与启动
@@ -25,7 +29,7 @@
 ## 数据与配置
 
 ```text
-mcpanel-0.3.1-win-x64/
+mcpanel-0.4.0-win-x64/
 ├─ start-panel.bat
 ├─ .env                  # 首次启动从 .env.example 复制
 ├─ data/

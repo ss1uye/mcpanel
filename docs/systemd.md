@@ -91,4 +91,4 @@ sudo systemctl start mcpanel          # 启动时自动迁移数据库
 
 - `journalctl -u mcpanel -f` 或 `data/logs/panel.N`（10 MB 轮转，保留 5 份）
 - 忘记密码时停止面板后执行 `node scripts/reset-password.mjs`（会读取 `.env` 的 `DATA_DIR`）
-- `curl http://127.0.0.1:3000/api/health` → `{"ok":true,"version":"0.3.1"}`
+- `curl http://127.0.0.1:3000/api/health` → `{"ok":true,"version":"0.4.0"}`

@@ -207,19 +207,19 @@ if (typeof process.send === 'function') {
 - preload 只暴露最小 API：
   - `openExternal(url)`（仅允许 `http(s)`）
   - `getVersion()`
-  - `saveFile({ url, filename })`（仅在大文件下载回退时使用；主进程校验
-    URL 必须与当前面板 origin 一致）
+  - `saveFile({ url, filename })`（桌面下载使用；主进程校验 URL 必须与当前面板
+    origin 一致，并禁止跨源重定向）
 - 不在日志中输出密码、RCON 密码或会话 token。
-- Electron 版本在实施时固定为当时的 stable，并写入 lockfile；Node 运行时固定为 24。
+- Electron 固定为 `45.0.0`（electron-builder 要求精确版本）；Node 运行时固定为 24。
 
 ## 8. 文件传输
 
 - 上传继续走 `<input type="file">` / 拖拽，Electron 原生对话框直接可用。
-- 下载先验证 Electron 的 File System Access API：
-  - 可用：沿用现有流式保存到磁盘实现；
-  - 不可用：前端检测 `window.mcpanelDesktop.saveFile`，通过 preload IPC 调用
-    主进程 `dialog.showSaveDialog`，主进程用 Node `fetch` + `createWriteStream`
-    流式写盘。禁止把多 GB 备份读入内存。
+- 桌面下载优先检测 `window.mcpanelDesktop.saveFile`：通过 preload IPC 调用主进程
+  `dialog.showSaveDialog`，主进程用 `session.fetch`（带 Cookie、禁止跨源重定向）
+  流式写入 `.part` 文件，成功后 rename 到目标位置；失败时清理 `.part`。
+- 浏览器环境继续使用 File System Access API，不支持时回退到 blob 下载。
+  禁止把多 GB 备份读入内存。
 - 下载保存路径由用户选择；不默认写入安装目录。
 
 ## 9. 打包与发布
@@ -297,7 +297,7 @@ if (typeof process.send === 'function') {
 
 | 风险 | 缓解 |
 | --- | --- |
-| 安装体积约 250–300MB | 明确取舍；后续可评估 Tauri 或以 Electron Node 替代自带 Node |
+| 安装后约 535MB、安装包约 155MB；便携 exe 每次启动需解压（约 1–2 分钟） | 明确取舍；日常推荐安装版，后续可评估 Tauri 或以 Electron Node 替代自带 Node |
 | SmartScreen 提示来源未知 | v0.4.x 代码签名；文档说明从 Releases 下载并校验 SHA256 |
 | Electron 崩溃留下面板子进程 | IPC `disconnect` 自动退出 + `runtime.json` 孤儿检测 |
 | 强制结束误杀 Minecraft | 只结束面板 pid，不带 `/T`；优先 IPC 优雅退出 |

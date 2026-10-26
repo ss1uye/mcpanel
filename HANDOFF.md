@@ -1,11 +1,11 @@
 # MC Panel 交接文档
 
-> 最后更新：2026-10-26 · 版本 v0.3.1 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树：桌面版计划编写中
+> 最后更新：2026-10-27 · 版本 v0.4.0 · 分支 `feat/desktop-electron` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树：桌面版实现完成，v0.4.0 待发布
 > 用途：上下文压缩或换人接手后，凭本文档即可继续，无需重新探索。
 
 ## 1. 一句话状态
 
-自托管 Minecraft Java 模组服管理面板（v0.3，单管理员/单机）：阶段 1–3、v0.2 打磨与 v0.3 Windows 便携发版全部完成。测试、类型、Lint、构建、Playwright 冒烟、便携包冒烟全绿；CI 双平台 + Ubuntu e2e + gitleaks 通过。本地已纳管真实实例 `fuwuduan`（Forge 1.20.1-47.4.0，使用便携 JRE 17）。
+自托管 Minecraft Java 模组服管理面板（v0.4，单管理员/单机）：v0.3.1 性能/安全版已发布；v0.4.0 新增 Windows Electron 桌面版（原生窗口、托盘、安装器/便携 exe、内置 Node 24 子进程），实现与打包验证完成，等待打 `v0.4.0` tag 发布。本地已纳管真实实例 `fuwuduan`（Forge 1.20.1-47.4.0，使用便携 JRE 17）。
 
 ## 2. 恢复工作（三步）
 
@@ -20,13 +20,18 @@ npm run build && npm start        # 生产：http://127.0.0.1:3000
 
 ```bash
 npm run typecheck      # 0 错误
-npm test               # server 237 / web 59 / shared 12
+npm test               # server 240 / web 63 / desktop 46 / shared 12
 npm run lint
 npm run build
-npm run test:e2e       # Playwright Chromium，约 10s
-npm run release:portable   # Windows x64 便携 ZIP
-npm run smoke:portable     # 解压 ZIP 后真实启动并检查 health/首页/数据
+npm run test:e2e            # Web Playwright Chromium，约 10s
+npm run release:portable    # Windows x64 服务器便携 ZIP
+npm run smoke:portable      # 解压 ZIP 后真实启动并检查 health/首页/数据
+npm run release:desktop     # 桌面构建 + Electron E2E + 隔离冒烟 + SHA256SUMS
 ```
+
+本机开发 shell 可能设置 `ELECTRON_RUN_AS_NODE=1`，会让 Electron 以 Node 模式运行而
+`require('electron')` 返回路径。`smoke-desktop.mjs` 和桌面 E2E 会主动删除该变量；
+手动运行 Electron 时也需 `env -u ELECTRON_RUN_AS_NODE`。
 
 ## 3. 当前会话的运行状态（压缩后可能已失效）
 
@@ -36,7 +41,8 @@ npm run smoke:portable     # 解压 ZIP 后真实启动并检查 health/首页/�
 - 数据目录：`./data`（已 gitignore），已初始化管理员 `admin`。**密码不记录在文档中**；若遗忘，停服后执行
   `node scripts/reset-password.mjs admin` 重置（会清空会话）。
 - 停止方式：用会话里的后台任务停止，或按端口找 PID：`netstat -ano | grep :3000` / `:5174`。
-- 尚未纳管实例；下一步通常是「实例 → 纳管实例」。
+- 桌面 smoke 使用临时 userData，不读写 `./data`；桌面安装版数据在 `%APPDATA%\MC Panel`。
+- 当前无后台服务在运行；下一步是 v0.4.0 发布前的手工验收（托盘/自启/安装器/数据导入）。
 
 ## 4. 文档索引
 
@@ -53,7 +59,9 @@ npm run smoke:portable     # 解压 ZIP 后真实启动并检查 health/首页/�
 | `docs/superpowers/plans/HANDOFF-phase4.md` | v0.2 收尾、决策与验证记录 |
 | `docs/superpowers/specs/2026-10-26-mcpanel-portable-release-design.md` | v0.3 便携发版设计 |
 | `docs/superpowers/specs/2026-10-26-mcpanel-desktop-design.md` | v0.4 桌面版（Electron）设计 |
+| `docs/superpowers/plans/2026-10-26-mcpanel-desktop.md` | v0.4 桌面版实施计划（10 个任务） |
 | `docs/releases/v0.3.1.md` | v0.3.1 发版说明（GitHub Release 正文） |
+| `docs/releases/v0.4.0.md` | v0.4.0 桌面版发版说明（GitHub Release 正文） |
 | `docs/superpowers/plans/2026-10-26-mcpanel-portable-release.md` | v0.3 便携发版计划 |
 | `docs/portable.md` | Windows 便携版下载、启动、升级、迁移与排障 |
 | `README.md` | 安装/开发/生产/备份与恢复/定时任务/安全/升级/忘记密码 |
@@ -77,9 +85,17 @@ apps/web/src/
 ├─ stores/realtime.ts   WS 引用计数、重连退避、console/metrics/state/tasks 切片
 ├─ pages/               Dashboard/Instances/Audit/Settings + instance/{Overview,Console,Players,Files,Config,Backups,Schedules,Settings}
 ├─ components/          UI 原语、ErrorBoundary、PlayerList、FileBrowser/Editor、PropertiesForm、BackupList、ScheduleForm、TaskProgress…
+apps/desktop/src/
+├─ main.ts              Electron 生命周期、窗口、托盘、IPC、数据导入、孤儿处理
+├─ server-process.ts    内置 Node 24 子进程、健康检查、IPC shutdown
+├─ runtime.ts           runtime.json、PID/端口孤儿检测
+├─ data-import.ts       staging + rename 原子导入现有 data/
+├─ paths.ts / preferences.ts / tray.ts / preload.ts
 packages/shared/        types/constants/errors/zod schemas（浏览器安全，不得 import node:*）
-scripts/                dev.mjs、start-panel.bat、reset-password.mjs、clean-e2e.mjs
-e2e/                    Playwright 冒烟（global-setup 造临时假服务端）
+scripts/                dev.mjs、start-panel.bat、reset-password.mjs、clean-e2e.mjs、
+                        prepare-desktop-payload.mjs、make-icon.mjs、smoke-desktop.mjs、release-checksums.mjs
+e2e/                    Web Playwright 冒烟；e2e/desktop 为 Electron 启动冒烟
+packaging/              icon.png / icon.ico（脚本生成，透明圆角）
 ```
 
 ## 6. 关键事实与约定
@@ -92,6 +108,11 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - **Java 路径**：实例的 `java_path` 既用于启动前校验，也会在启动时把其所在目录前置到 `PATH` 并设置 `JAVA_HOME`；启动阶段出现 `Unsupported class file major version` / `UnsupportedClassVersionError` 会结束残留启动器并标记 `crashed`。
 - **指标采样**：单次采集失败（例如 Windows 上的 `EBUSY`）只记录 `warn` 并跳过本次，不再触发进程级 unhandledRejection 导致面板退出。
 - **便携发版**：`npm run release:portable` 生成 `release/mcpanel-<version>-win-x64.zip`；包内含 `process.execPath` 对应的 Node 24、服务端生产依赖、前端/后端构建、`start-panel.bat`、`scripts/reset-password.mjs`、Node 许可证；不含 `.env`、`data/`、测试或源码。`npm run smoke:portable` 解压并真实启动验证。
+- **桌面版**：`apps/desktop` 由 electron-builder 打包。主进程 spawn `resources/server/node/node.exe resources/server/apps/server/dist/index.js`，env 为 `PANEL_HOST=127.0.0.1`、随机 `PANEL_PORT`、`DATA_DIR=<userData>/data`；子进程通过 IPC `shutdown` / `disconnect` 优雅退出；`runtime.json` 记录 PID/端口用于孤儿检测。
+- **桌面数据**：安装版 `%APPDATA%\MC Panel`；便携版 `<exe>\mcpanel-data`；首次启动可导入旧 `data/`；桌面日志在 `<data>/logs/desktop.log`。单实例锁按 userData 隔离，安装版与便携版可同时运行。
+- **桌面打包**：`npm run desktop:package` 用 `package-portable.mjs --no-zip` 复用服务器 payload；electron-builder 的 `extraResources` 必须同时复制 `build/server` 和 `build/server/node_modules`（builder 会过滤根 `node_modules`）；`npm run release:desktop` 额外跑 Electron E2E、仓库外隔离 smoke 和 SHA256SUMS。
+- **桌面退出**：`before-quit` 只停面板子进程，不停 Minecraft；smoke 只删临时 `data` 子目录，Chromium userData 由后续启动的 24 小时 sweep 清理；`ELECTRON_RUN_AS_NODE` 必须在 smoke/E2E 环境中删除。
+- **桌面安全**：`contextIsolation` + `sandbox`、无 `nodeIntegration`、只允许本地面板 origin、权限请求仅放行剪贴板、下载禁止重定向并使用 `.part` 后 rename。
 - **计划任务**：croner、独立时区、重叠跳过、不补跑、每计划保留 100 条运行记录；删除实例前先 `forgetInstance`；列表/创建/更新返回 `nextRuns`（3 条），`GET /api/instances/:id/schedules/preview` 供表单预览。
 - **CSP**：每请求 nonce；`style-src 'self' 'nonce-…'`；`connect-src 'self' ws://<Host> wss://<Host>`；`TRUST_PROXY=true` 时优先 `X-Forwarded-Host`。HTML 模板 `apps/web/index.html` 的 `__CSP_NONCE__` 由服务端按请求替换（`no-store`）；CodeMirror 用 `EditorView.cspNonce`，Radix 动态样式通过 `window.__webpack_nonce__`。
 - **面板库快照**：`PanelBackupService` 使用 better-sqlite3 `backup()` 写入 `data/tmp/panel-*.db`，下载流关闭后删除；CLI 为 `scripts/backup-panel-db.mjs`；审计动作 `panel.backup`。
@@ -104,10 +125,10 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 
 - 许可证：MIT（`LICENSE`）。
 - 依赖安全：`@fastify/static` 10.1.7、`drizzle-orm` 0.45.4、`zod` 4.6.7；`npm audit --omit=dev --audit-level=high` 为 0 漏洞。
-- CI：`.github/workflows/ci.yml`，`main` push 与 PR 触发四个 job（`concurrency` 同分支去重，npm 11.19.1）：
+- CI：`.github/workflows/ci.yml`，`main` push 与 PR 触发五个 job（`concurrency` 同分支去重，npm 11.19.1）：
   `static`（ubuntu：typecheck + lint + 生产依赖审计，审计显式使用 npmjs registry）、`test`（ubuntu + windows 矩阵：test + build；Windows 额外打包/冒烟便携包）、
-  `e2e`（ubuntu：Playwright Chromium）、`secret-scan`（gitleaks 全历史）。
-- 发布：`.github/workflows/release.yml`，`v*` tag 或手动触发，在 Windows 上构建便携 ZIP、冒烟、上传 artifact；tag 时创建 GitHub Release（ZIP + SHA256SUMS）。
+  `desktop`（windows：`release:desktop` 打包 + Electron E2E + 隔离 smoke）、`e2e`（ubuntu：Playwright Chromium）、`secret-scan`（gitleaks 全历史）。
+- 发布：`.github/workflows/release.yml`，`v*` tag 或手动触发，在 Windows 上构建服务器便携 ZIP + 桌面安装器/便携 exe、运行冒烟、上传 artifact；tag 时创建 GitHub Release（全部产物 + SHA256SUMS，正文取 `docs/releases/<tag>.md`）。
 - 已发布 v0.3.0：https://github.com/ss1uye/mcpanel/releases/tag/v0.3.0（tag 指向 `212b5b8`，ZIP 57,099,945 bytes，SHA256 `c6daa52129cfd1bc8dabec8656bfac7fb7e0c0d2c5515cef0186998d151e86a7`）。
 - 已发布 v0.3.1：https://github.com/ss1uye/mcpanel/releases/tag/v0.3.1（tag 指向 `8d841a2`，ZIP 57,607,944 bytes，SHA256 `07ba3bcbfef8853bb7da2095de1868a3480327a8ddc183c6ca0e6cd2efd0b356`；Release workflow 与 CI 均通过；桌面版设计 spec 为 `9387283`）。
 - 密钥扫描：`.gitleaks.toml`；测试/文档中的已知测试凭据通过白名单排除。
@@ -129,7 +150,8 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 - 计划：列表与表单展示未来 3 次运行时间。
 - 前端：路由级懒加载；首屏入口 `index` 161.0 kB + `react` 258.0 kB（gzip 52.0 + 81.9 kB），`CodeEditor` 436.9 kB（gzip 142.9 kB）按需加载；sparkline 改为纯 SVG，recharts 与 `charts` 分包已移除；web 仅从 `@mcpanel/shared/constants` 取运行时值，避免 zod/schemas 进入首屏。
 - 性能：控制台日志按 60ms 批量推送、前端按 seq 增量去重；系统指标改用 `os.*`，实例指标并行采样并共享进程枚举；备份一次遍历生成文件清单并复用，文件列表分批并发 stat；`server.properties` 按 mtime/ctime/size 缓存并在面板写入后失效；玩家数据只在运行/孤儿状态轮询；删除实例改用异步清理备份目录。
-- 发版：Windows x64 便携 ZIP（内置 Node 24，约 55 MB），双击 `start-panel.bat`，用 Edge 打开；数据在包内 `data/`。
+- 桌面：Electron 安装器 + 便携 exe；原生窗口、托盘、单实例、开机自启、关窗到托盘、首次数据导入、剪贴板、流式下载桥；打包后仓库外隔离 smoke 与 Electron E2E 通过。
+- 发版：服务器便携 ZIP（内置 Node 24，约 55 MB）+ 桌面安装器/便携 exe；桌面应用无需浏览器或预装 Node。
 
 ## 9. 已知限制（可接受，未阻塞 v0.3）
 
@@ -144,13 +166,20 @@ e2e/                    Playwright 冒烟（global-setup 造临时假服务端�
 9. 登录限速按 `request.ip`：`TRUST_PROXY=true` 且前面没有净化 `X-Forwarded-For` 的反代时可被伪造头绕过；共享出口 IP 时可反向锁死管理员 15 分钟。
 10. WS 连接在会话吊销（登出/改密码）后仍存活到断开为止；前端上传无进度/不可取消。
 11. 面板进程异常退出时，Windows 上启动器 `cmd.exe` 可能先退出而 JVM 继续运行；重启后面板按 `last_pid` 只会把实例标记为 `crashed`，无法接管该 JVM，需要人工结束进程后重新启动实例。
-12. 便携版没有安装器、Windows 服务、自动启动或自动更新；关闭控制台即停止面板，升级需手动替换并保留 `data/`。
+12. 服务器便携版没有安装器、Windows 服务或自动更新；关闭控制台即停止面板，升级需手动替换并保留 `data/`。
 13. 便携 ZIP 未签名，Windows/杀软可能提示来源未知；需从 Releases 下载并核对 SHA256，解压到可写目录（不要放 `C:\Program Files`）。
-14. 便携包约 55 MB（含 Node 24 与生产依赖）；首次启动在包内创建 `data/`。
+14. 服务器便携包约 55 MB（含 Node 24 与生产依赖）；首次启动在包内创建 `data/`。
+15. 桌面安装器/便携 exe 未签名，SmartScreen 可能提示来源未知；0.4.0 无自动更新，新版本需手动下载。
+16. 桌面版仅 Windows 10/11 x64；安装后约 535 MB（Electron + Node 24 + 服务端依赖），安装包约 155 MB、便携 exe 约 134 MB。便携版每次启动都需要解压，明显慢于安装版。
+17. 桌面退出时若面板服务仍在 starting，`stop()` 会拒绝；`before-quit` 仍清理 runtime 并退出，Windows 由 OS 回收子进程，POSIX 依赖 IPC disconnect。恢复重启期间的崩溃事件存在窄窗口被吞掉。
+18. 桌面单实例锁按数据目录隔离：安装版与便携版可以同时运行，但它们是两个独立面板、两份数据。
+19. 桌面权限请求默认拒绝，仅放行剪贴板；其他 Web 权限（通知、摄像头等）需显式扩展。
+20. 桌面下载桥只接受当前面板 origin；重定向直接失败，文件先写 `.part` 再 rename；便携 exe 首次解压可能受杀软扫描影响。
 
 ## 10. 建议的下一步
 
-1. 纳管一个真实测试服，跑一遍手工验收矩阵（规格 §21.4），重点：Windows 中文/空格路径、面板重启时的孤儿检测、运行中严格备份、恢复、反向代理下的 CSP/`X-Forwarded-Host`。
-2. 可选增强：备份 manifest 的 SHA-256 存证与完整性校验、备份到外部存储（S3/WebDAV）、告警 Webhook、远程节点/多用户（规格 §24）。
-3. 发版增强（按需）：代码签名、Windows 安装器/服务、自动更新、Linux 包或 Docker。
-4. 若继续用 AI 代理：先读本文件，再读 `HANDOFF-phase4.md`、v0.3 便携发版计划与 `docs/portable.md`，按“测试先行 + 小步提交”的方式推进。
+1. **发布 v0.4.0**（需用户明确批准）：合并 `feat/desktop-electron` 到 `main`，确认版本 0.4.0，打 `v0.4.0` tag 并推送；验证 Release workflow 产出的安装器、便携 exe、服务器 ZIP 和 SHA256SUMS。
+2. 手工验收桌面版：安装器/便携启动、托盘、开机自启、单实例、数据导入、关窗到托盘、退出不停止 Minecraft、安装版与便携版独立数据。
+3. 后续增强：electron-updater 自动更新、Windows 代码签名、修复 stop-during-start 取消费、原生通知；再评估 Tauri/体积优化。
+4. 可选增强：备份 manifest 的 SHA-256 存证与完整性校验、备份到外部存储（S3/WebDAV）、告警 Webhook、远程节点/多用户（规格 §24）。
+5. 若继续用 AI 代理：先读本文件与 `docs/superpowers/specs/2026-10-26-mcpanel-desktop-design.md`，按“测试先行 + 小步提交”的方式推进；桌面回归必须跑 `npm run release:desktop`，并在仓库外验证 win-unpacked 的启动。

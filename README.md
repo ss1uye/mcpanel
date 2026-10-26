@@ -5,7 +5,7 @@
 
 自托管的 Minecraft Java 模组服管理面板。当前版本面向单管理员、单机节点，纳管已经安装好的 Fabric / Forge / NeoForge 服务器目录，不接管安装流程。
 
-## 当前阶段（v0.3）
+## 当前阶段（v0.4）
 
 - 首次初始化、登录、会话与 CSRF 防护
 - 纳管已有服务器目录（自动探测启动脚本、Java、server.properties、EULA、RCON 端口）
@@ -27,27 +27,35 @@
 - 面板数据：设置页一键下载 SQLite 在线快照，或使用 `scripts/backup-panel-db.mjs`
 - 计划：列表与表单展示未来 3 次运行时间
 - 前端：路由级懒加载，编辑器按需加载，sparkline 使用轻量 SVG
-- 发版：Windows x64 便携 ZIP，内置 Node 24，解压双击启动，无需预装 Node/npm
+- 发版：Windows x64 服务器便携 ZIP；v0.4 新增 Electron 桌面版（安装器 + 便携 exe）
 
-v0.3.1 是性能、稳定性与安全更新，无数据库结构变更；v0.3 系列提供 Windows 便携发版，玩家、文件、配置、备份与计划仍在同一个面板内闭环。
+v0.4.0 新增 Windows 桌面版（Electron）：原生窗口、托盘、单实例、开机自启和首次数据导入，现有 Web 面板与 Minecraft 管理能力保持不变，无数据库结构变更。
 
-## 下载便携版（Windows x64）
+## 下载（Windows x64）
 
-从 [GitHub Releases](https://github.com/ss1uye/mcpanel/releases/latest) 下载
-`mcpanel-0.3.1-win-x64.zip`，解压到有写权限的目录（例如 `D:\MC Panel`），双击
-`start-panel.bat`，脚本会自动用 Edge 打开 `http://127.0.0.1:3000`。
+从 [GitHub Releases](https://github.com/ss1uye/mcpanel/releases/latest) 下载：
 
+**桌面版（推荐）**
+
+- `MC-Panel-Setup-0.4.0.exe`：每用户安装器，无需管理员；数据在 `%APPDATA%\MC Panel`。
+- `MC-Panel-0.4.0-portable.exe`：便携版，数据在 exe 旁的 `mcpanel-data/`。每次启动需要解压约 535 MB，首次可能较慢。
+- 首次启动可导入现有 `data/`；关闭窗口默认最小化到托盘，退出桌面应用不会停止 Minecraft 服务器。
+- 安装包未签名，Windows 可能提示“来源未知”；请从本仓库 Releases 下载并核对 SHA256。
+
+**服务器便携版（无桌面环境/高级用户）**
+
+- `mcpanel-0.4.0-win-x64.zip`：内置 Node 24，解压到有写权限的目录（例如 `D:\MC Panel`），双击 `start-panel.bat`。
 - 不需要安装 Node.js 或 npm；数据在包内 `data/`。
 - 关闭启动窗口即停止面板，不会停止 Minecraft 服务器。
-- 升级时保留 `data/`；详见 [`docs/portable.md`](docs/portable.md)。
-- ZIP 未签名，Windows 可能提示“来自网络”；请从本仓库 Releases 下载并核对 SHA256。
+- 详见 [`docs/portable.md`](docs/portable.md)。
 
-下面的“环境要求/开发/生产”章节是针对**源码部署**的；便携版用户可以直接跳过。
+下面的“环境要求/开发/生产”章节是针对**源码部署**的；桌面版和便携版用户可以直接跳过。
 
 ## 环境要求
 
+- 桌面版：Windows 10/11 x64，无需安装 Node.js/浏览器（内置 Electron 与 Node 24）
 - 源码运行：Node.js 24.11 及以上、npm 11.16+（`engines` 已强制）
-- 便携版：Windows 10/11 x64，无需 Node.js/npm
+- 服务器便携版：Windows 10/11 x64，无需 Node.js/npm
 - 同一台机器上已安装 Java 与 Minecraft 服务端
 
 ## 开发
