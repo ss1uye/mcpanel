@@ -17,6 +17,7 @@ const zipPath = path.join(releaseRoot, `${folderName}.zip`);
 const noZip = process.argv.includes('--no-zip');
 
 if (process.platform !== 'win32') throw new Error('便携包目前只支持 Windows x64');
+if (process.arch !== 'x64') throw new Error('便携包目前只支持 Windows x64');
 if (Number(process.versions.node.split('.')[0]) !== 24) {
   throw new Error(`需要使用 Node 24 打包，当前为 ${process.version}`);
 }
@@ -105,7 +106,7 @@ async function runtimeDependencies() {
 }
 
 await fsp.rm(staging, { recursive: true, force: true });
-await fsp.rm(zipPath, { force: true });
+if (!noZip) await fsp.rm(zipPath, { force: true });
 await fsp.mkdir(staging, { recursive: true });
 
 await copyDir(path.join(repoRoot, 'apps/server/dist'), path.join(staging, 'apps/server/dist'));

@@ -5,10 +5,13 @@ directories:
   buildResources: build
 files:
   - dist/**
+  - '!dist/**/*.map'
   - package.json
 extraResources:
   - from: build/server
     to: server
+  - from: build/server/node_modules
+    to: server/node_modules
   - from: build/icon.png
     to: icon.png
 win:

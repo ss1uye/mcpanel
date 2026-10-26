@@ -6,12 +6,15 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
-if (process.platform !== 'win32') throw new Error('桌面版目前只支持 Windows x64');
+if (process.platform !== 'win32' || process.arch !== 'x64') {
+  throw new Error('桌面版目前只支持 Windows x64');
+}
 
 const result = spawnSync(process.execPath, ['scripts/package-portable.mjs', '--no-zip'], {
   cwd: repoRoot,
   stdio: 'inherit',
 });
+if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
 
 const source = path.join(repoRoot, 'release', `mcpanel-${pkg.version}-win-x64`);
