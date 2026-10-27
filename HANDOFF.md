@@ -1,11 +1,11 @@
 # MC Panel 交接文档
 
-> 最后更新：2026-10-27 · 版本 v0.4.0 · 分支 `feat/desktop-electron` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树：桌面版实现完成，v0.4.0 待发布
+> 最后更新：2026-10-27 · 版本 v0.4.0 · 分支 `main` · 远程 `origin` = `git@github.com:ss1uye/mcpanel.git`（公开）· 工作树：干净（v0.4.0 已发布）
 > 用途：上下文压缩或换人接手后，凭本文档即可继续，无需重新探索。
 
 ## 1. 一句话状态
 
-自托管 Minecraft Java 模组服管理面板（v0.4，单管理员/单机）：v0.3.1 性能/安全版已发布；v0.4.0 新增 Windows Electron 桌面版（原生窗口、托盘、安装器/便携 exe、内置 Node 24 子进程），实现与打包验证完成，等待打 `v0.4.0` tag 发布。本地已纳管真实实例 `fuwuduan`（Forge 1.20.1-47.4.0，使用便携 JRE 17）。
+自托管 Minecraft Java 模组服管理面板（v0.4，单管理员/单机）：v0.3.1 性能/安全版已发布；v0.4.0 Windows Electron 桌面版**已发布**（原生窗口、托盘、安装器/便携 exe、内置 Node 24 子进程）。本地已纳管真实实例 `fuwuduan`（Forge 1.20.1-47.4.0，使用便携 JRE 17）。
 
 ## 2. 恢复工作（三步）
 
@@ -129,6 +129,7 @@ packaging/              icon.png / icon.ico（脚本生成，透明圆角）
   `static`（ubuntu：typecheck + lint + 生产依赖审计，审计显式使用 npmjs registry）、`test`（ubuntu + windows 矩阵：test + build；Windows 额外打包/冒烟便携包）、
   `desktop`（windows：`release:desktop` 打包 + Electron E2E + 隔离 smoke）、`e2e`（ubuntu：Playwright Chromium）、`secret-scan`（gitleaks 全历史）。
 - 发布：`.github/workflows/release.yml`，`v*` tag 或手动触发，在 Windows 上构建服务器便携 ZIP + 桌面安装器/便携 exe、运行冒烟、上传 artifact；tag 时创建 GitHub Release（全部产物 + SHA256SUMS，正文取 `docs/releases/<tag>.md`）。
+- 已发布 v0.4.0：https://github.com/ss1uye/mcpanel/releases/tag/v0.4.0（tag 指向 `8e70872`；安装器 `MC-Panel-Setup-0.4.0.exe` 162,359,499 bytes / SHA256 `235c948a88167c79e2aa4f0a5ab94de51eba1278c98cb5dae0de1782fe2c2ae5`；便携 `MC-Panel-0.4.0-portable.exe` 140,506,943 bytes / SHA256 `9d97052353c6d867a7a15ff7a55f241756d114bfb60e3507f48faf67aaf4999a`；服务器 ZIP 57,608,327 bytes / SHA256 `db42603e3201e9e44c120cd457394fec1a1e5937d7acbf1c7f0a802624fc894e`；CI 与 Release workflow 均通过）。
 - 已发布 v0.3.0：https://github.com/ss1uye/mcpanel/releases/tag/v0.3.0（tag 指向 `212b5b8`，ZIP 57,099,945 bytes，SHA256 `c6daa52129cfd1bc8dabec8656bfac7fb7e0c0d2c5515cef0186998d151e86a7`）。
 - 已发布 v0.3.1：https://github.com/ss1uye/mcpanel/releases/tag/v0.3.1（tag 指向 `8d841a2`，ZIP 57,607,944 bytes，SHA256 `07ba3bcbfef8853bb7da2095de1868a3480327a8ddc183c6ca0e6cd2efd0b356`；Release workflow 与 CI 均通过；桌面版设计 spec 为 `9387283`）。
 - 密钥扫描：`.gitleaks.toml`；测试/文档中的已知测试凭据通过白名单排除。
@@ -178,8 +179,7 @@ packaging/              icon.png / icon.ico（脚本生成，透明圆角）
 
 ## 10. 建议的下一步
 
-1. **发布 v0.4.0**（需用户明确批准）：合并 `feat/desktop-electron` 到 `main`，确认版本 0.4.0，打 `v0.4.0` tag 并推送；验证 Release workflow 产出的安装器、便携 exe、服务器 ZIP 和 SHA256SUMS。
-2. 手工验收桌面版：安装器/便携启动、托盘、开机自启、单实例、数据导入、关窗到托盘、退出不停止 Minecraft、安装版与便携版独立数据。
-3. 后续增强：electron-updater 自动更新、Windows 代码签名、修复 stop-during-start 取消费、原生通知；再评估 Tauri/体积优化。
-4. 可选增强：备份 manifest 的 SHA-256 存证与完整性校验、备份到外部存储（S3/WebDAV）、告警 Webhook、远程节点/多用户（规格 §24）。
-5. 若继续用 AI 代理：先读本文件与 `docs/superpowers/specs/2026-10-26-mcpanel-desktop-design.md`，按“测试先行 + 小步提交”的方式推进；桌面回归必须跑 `npm run release:desktop`，并在仓库外验证 win-unpacked 的启动。
+1. 手工验收桌面版（已发布产物）：安装器/便携启动、托盘、开机自启、单实例、数据导入、关窗到托盘、退出不停止 Minecraft、安装版与便携版独立数据。
+2. 后续增强：electron-updater 自动更新、Windows 代码签名、修复 stop-during-start 取消费、原生通知；再评估 Tauri/体积优化。
+3. 可选增强：备份 manifest 的 SHA-256 存证与完整性校验、备份到外部存储（S3/WebDAV）、告警 Webhook、远程节点/多用户（规格 §24）。
+4. 若继续用 AI 代理：先读本文件与 `docs/superpowers/specs/2026-10-26-mcpanel-desktop-design.md`，按“测试先行 + 小步提交”的方式推进；桌面回归必须跑 `npm run release:desktop`，并在仓库外验证 win-unpacked 的启动。
